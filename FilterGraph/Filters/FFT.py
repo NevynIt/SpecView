@@ -12,6 +12,7 @@ class FFT(Filter):
         }
     
     def p_out(self, t0, t1):
+        raise NotImplementedError
         if self.p_in == None:
             return None
         src = self.p_in(t0,t1)

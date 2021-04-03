@@ -4,7 +4,11 @@ import wave
 import numpy as np
 
 class WavReader(Filter):
-    auto_attributes = {"m_filename": "", "open_filename": "", "_reader": None}
+    auto_attributes = {
+        "m_filename": "",
+        "open_filename": "",
+        "_reader": None
+        }
 
     def close(self):
         """Close the wav file."""
@@ -29,18 +33,18 @@ class WavReader(Filter):
         return Block.Domains.TIME
     
     @property
-    def p_resolution(self):
+    def p_framerate(self):
         self.open(self.p_filename)
         if self.open_filename == "":
             return None
-        return np.array( [self._reader.getframerate(), np.nan] )
+        return self._reader.getframerate()
 
     @property
-    def p_bounds(self):
+    def p_frames(self):
         self.open(self.p_filename)
         if self.open_filename == "":
             return None
-        return np.array( [[0,self._reader.getnframes()/self._reader.getframerate()],[np.nan,np.nan]] )
+        return self._reader.getnframes()
 
     @property
     def p_channels(self):
@@ -53,7 +57,7 @@ class WavReader(Filter):
     def p_pos(self):
         if self.open_filename == "":
             return None
-        return self._reader.tell()/self._reader.getnframes()
+        return self._reader.tell()
     
     @property
     def p_EOF(self):
@@ -61,57 +65,79 @@ class WavReader(Filter):
             return None
         return self._reader.tell() == self._reader.getnframes()
 
-    def p_out(self, t0, t1):
+    def p_out(self, frames = None, pos = None):
         self.open(self.p_filename)
-        tmp = Block()
-        tmp.domain = Block.Domains.TIME
-
         if self.open_filename == "":
             return None
 
+        tmp = Block()
+        tmp.p_domain = Block.Domains.TIME
+        tmp.p_source_range = (0, self.p_frames)
+
         framerate = self._reader.getframerate()
         channels = self._reader.getnchannels()
-        tmp.resolution = np.array( [framerate, np.nan] )
+        tmp.p_framerate = framerate
 
-        if t1<=t0:
-            return None
-
-        tmax = self._reader.getnframes() / framerate
-        if t1 >= tmax:
-            t1 = tmax
-            tmp.EOF = True
-
-        tmp.data = np.zeros( (channels,int((t1-t0)*framerate),1) )
-        tmp.bounds = np.array([[t0,t1],[np.nan,np.nan]])
-
-        if t1 <= 0:
+        if frames == None:
+            tmp.p_data = np.zeros( (channels,0,1) )
             return tmp
-
-        if t0 < 0:
-            blanks = int(-t0*framerate)
-        else:
-            blanks = 0
-            self._reader.setpos(int(t0*framerate))
         
-        toread = int((t1-t0)*framerate)-blanks
-        frames = self._reader.readframes(toread)
-        samplewidth = self._reader.getsampwidth()
-        sampleformat = f"<i{samplewidth}"
-        tmp.data[:,blanks:,:] = np.frombuffer(frames, sampleformat).reshape( (1, -1, channels) ).T.astype(np.float32) / (2**15)
+        tmp.p_data = np.zeros( (channels,frames,1) )
+        if pos == None:
+            pos = self.p_pos
+
+        if pos+frames >= self.p_frames:
+            tmp.p_EOF = True
+
+        if pos < 0:
+            skip = -pos
+            toread = frames-skip
+        else:
+            skip = 0
+            toread = frames
+            if pos != self.p_pos:
+                self._reader.setpos(pos)
+        
+        if toread > 0:
+            wavdata = self._reader.readframes(toread)
+            samplewidth = self._reader.getsampwidth()
+            sampleformat = f"<i{samplewidth}"
+            data = np.frombuffer(wavdata, sampleformat).reshape( (1, -1, channels) ).T.astype(np.float32) / (2**15)
+            tmp.p_data[:,skip:skip+data.shape[1],:] = data
+        
         return tmp
 
 class WavWriter(Filter):
     auto_attributes = {
         "p_domain": Block.Domains.TIME,
-        "m_bounds": np.array( [[-np.Infinity,np.Infinity],[np.nan,np.nan]] ),
-        "m_resolution": np.array( [np.nan, np.nan] ),
-        "m_channels": np.nan,
         "m_filename": "",
         "open_filename": "",
         "_writer": None,
         "m_in": None
         }
 
+    def __init__(self, input = None):
+        Filter.__init__(self)
+        self.p_in = input
+
+    @property
+    def p_frames(self):
+        if self.p_in == None:
+            return None
+        return self.p_in().p_source_frames
+    
+    @property
+    def p_channels(self):
+        if self.p_in == None:
+            return None
+        return self.p_in().p_channels
+    
+    @property
+    def p_framerate(self):
+        if self.p_in == None:
+            return None
+        return self.p_in().p_framerate
+    
     def open(self, filename):
         if filename == self.open_filename:
             return
@@ -122,10 +148,8 @@ class WavWriter(Filter):
             self._writer.setcomptype("NONE", "not compressed")
             self._writer.setnchannels(self.p_channels)
             self._writer.setsampwidth(2) #always save as signed int16
-            self._writer.setframerate(self.p_resolution[0])
-            nframes = (self.p_bounds[0,1]-self.p_bounds[0,0])*self.p_resolution[0]
-            if nframes < np.Infinity:
-                self._writer.setnframes(int(nframes))
+            self._writer.setframerate(self.p_framerate)
+            self._writer.setnframes(self.p_frames - self.p_in().p_end)
 
         self.open_filename = filename
 
@@ -139,14 +163,14 @@ class WavWriter(Filter):
     def p_pos(self):
         if self.open_filename == "":
             return 0
-        return self._writer.tell()/self.p_resolution[0]
+        return self._writer.tell()
 
-    def flush(self, t):
+    def flush(self, frames):
         self.open(self.p_filename)
         if not self.p_in is None:
-            src = self.p_in(self.p_pos, self.p_pos + t)
-            assert src.domain == Block.Domains.TIME
-            assert src.resolution[0] == self.p_resolution[0]
-            assert src.data.shape[0] == self.p_channels
-            assert src.data.shape[2] == 1
-            self._writer.writeframesraw( (src.data*(2**15)).astype(np.int16).T.tobytes() )
+            src = self.p_in(frames)
+            assert src.p_domain == Block.Domains.TIME
+            assert src.p_framerate == self._writer.getframerate()
+            assert src.p_channels == self._writer.getnchannels()
+            assert src.p_frequency_bins == 1
+            self._writer.writeframesraw( (src.p_data*(2**15)).astype(np.int16).T.tobytes() )

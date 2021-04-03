@@ -1,7 +1,6 @@
 from ..Filter import Filter
 from ..Block import Block
 import numpy as np
-import nnresample
 import scipy.interpolate
 import scipy.signal
 import enum
@@ -9,52 +8,66 @@ import enum
 class Resample(Filter):
     class Methods(enum.Enum):
         NUMPY = 1
-        NNRESAMPLE = 2
-        SCIPY_INTERP = 3
-        SCIPY_RESAMPLE = 4
+        SCIPY_INTERP = 2
+        SCIPY_RESAMPLE = 3
 
     auto_attributes = {
         "p_method": Methods.SCIPY_INTERP,
         "p_interp_kind": "linear",
-        "m_resolution": np.array( [44100, np.nan] ),
+        "p_framerate": 44100,
         "m_in": None
         }
     
     def __init__(self, input = None):
         Filter.__init__(self)
         self.p_in = input
+    
+    @property
+    def p_input_framerate(self):
+        if self.p_in == None:
+            return None
+        return self.p_in().p_framerate
+    
+    @property
+    def p_ratio(self):
+        if self.p_in == None:
+            return None
+        return self.p_framerate/self.p_input_framerate
 
-    def p_out(self, t0, t1):
+    def p_out(self, frames = None, pos = None):
         if self.p_in == None:
             return None
         
-        tmp = Block()
-        src = self.p_in(t0,t1)
-        tmp.domain = src.domain
-        tmp.resolution[0] = self.p_resolution[0]
-        tmp.resolution[1] = src.resolution[1]
-        
-        tmp.bounds = src.bounds
-        if self.p_method == Resample.Methods.NNRESAMPLE:
-            tmp.data = nnresample.resample(src.data,self.p_resolution[0],src.resolution[0],1)
-        
-        elif self.p_method == Resample.Methods.SCIPY_INTERP:
-            nsamples = int(tmp.resolution[0]*(tmp.bounds[0,1]-tmp.bounds[0,0]))
-            x = np.mgrid[0: 1: 1/nsamples]
-            xp = np.mgrid[0: 1: 1/src.data.shape[1]]
-            interpolator = scipy.interpolate.interp1d(xp, src.data, axis = 1, copy = False, kind=self.p_interp_kind)
-            tmp.data = interpolator(x)
+        f = self.p_ratio
+        askframes = int(frames/f) if frames != None else None
+        src = self.p_in(askframes, pos)
+        tmp = src.copy()
+        #update start, source_range, framerate, data
+        tmp.p_framerate = self.p_framerate
+        tmp.p_start = int(src.p_start*f)
+        tmp.p_source_range = (int(src.p_source_range[0]*f), int(src.p_source_range[1]*f))
+        frames = int(src.p_frames*f)
+
+        if frames == 0:
+            tmp.p_data = np.zeros( (src.p_channels, 0, src.p_frequency_bins) )
+            return tmp
+       
+
+        if self.p_method == Resample.Methods.SCIPY_INTERP:
+            x = np.mgrid[0: 1: 1/frames]
+            xp = np.mgrid[0: 1: 1/src.p_frames]
+            interpolator = scipy.interpolate.interp1d(xp, src.p_data, axis = 1, copy = False, kind=self.p_interp_kind)
+            tmp.p_data = interpolator(x)
         
         elif self.p_method == Resample.Methods.SCIPY_RESAMPLE:
-            nsamples = int(tmp.resolution[0]*(tmp.bounds[0,1]-tmp.bounds[0,0]))
-            tmp.data = scipy.signal.resample(src.data,nsamples,axis=1)
+            tmp.p_data = scipy.signal.resample(src.p_data,frames,axis=1)
 
         elif self.p_method == Resample.Methods.NUMPY:
-            tmp.data = np.zeros( (self.p_channels, int(tmp.resolution[0]*(tmp.bounds[0,1]-tmp.bounds[0,0])), int(tmp.resolution[1]*(tmp.bounds[1,1]-tmp.bounds[1,0])) ) )
-            x = np.mgrid[0: 1: 1/tmp.data.shape[1]]
-            xp = np.mgrid[0: 1: 1/src.data.shape[1]]
-            for channel in range(tmp.data.shape[0]):
-                for freq in range(tmp.data.shape[2]):
-                    tmp.data[channel,:,freq] = np.interp(x,xp,src.data[channel,:,freq])
+            x = np.mgrid[0: 1: 1/frames]
+            xp = np.mgrid[0: 1: 1/src.p_frames]
+            tmp.p_data = np.zeros( (self.p_channels, frames, src.p_frequency_bins ) )
+            for channel in range(tmp.p_channels):
+                for freq in range(tmp.p_frequency_bins):
+                    tmp.p_data[channel,:,freq] = np.interp(x,xp,src.p_data[channel,:,freq])
 
         return tmp
