@@ -22,10 +22,6 @@ class Resample(Filter):
         "m_in": None
         }
     
-    def __init__(self, input = None):
-        Filter.__init__(self)
-        self.p_in = input
-    
     @property
     def p_input_framerate(self):
         if self.p_in_params == None:

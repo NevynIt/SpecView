@@ -120,10 +120,6 @@ class WavWriter(Filter):
         "p_in_params": lambda self, name: None if self.p_in == None else self.p_in()
     }
 
-    def __init__(self, input = None):
-        Filter.__init__(self)
-        self.p_in = input
-
     @property
     def p_frames(self):
         if self.p_in_params == None:
