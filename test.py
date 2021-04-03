@@ -38,7 +38,7 @@ def testWav():
     from FilterGraph.Filters.Resample import Resample
 
     wr = WavReader()
-    wr.p_filename = "Pirates.wav"
+    wr.p_filename = r"res\Pirates.wav"
 
     rs = Resample()
     rs.p_resolution[0] = 22050
@@ -48,7 +48,7 @@ def testWav():
     ww.bind_props(["p_resolution"], rs)
     ww.bind_props(["p_channels","p_bounds"], wr)
     ww.p_in = rs.p_out
-    ww.p_filename = "Pirate22050.wav"
+    ww.p_filename = r"out\Pirate22050.wav"
 
     t0 = time.time()
     while not wr.p_EOF:
