@@ -114,7 +114,11 @@ class WavWriter(Filter):
         "open_filename": "",
         "_writer": None,
         "m_in": None
-        }
+    }
+
+    cached_props = {
+        "p_in_params": lambda self, name: None if self.p_in == None else self.p_in()
+    }
 
     def __init__(self, input = None):
         Filter.__init__(self)
@@ -122,21 +126,21 @@ class WavWriter(Filter):
 
     @property
     def p_frames(self):
-        if self.p_in == None:
+        if self.p_in_params == None:
             return None
-        return self.p_in().p_source_frames
+        return self.p_in_params.p_source_frames
     
     @property
     def p_channels(self):
-        if self.p_in == None:
+        if self.p_in_params == None:
             return None
-        return self.p_in().p_channels
+        return self.p_in_params.p_channels
     
     @property
     def p_framerate(self):
-        if self.p_in == None:
+        if self.p_in_params == None:
             return None
-        return self.p_in().p_framerate
+        return self.p_in_params.p_framerate
     
     def open(self, filename):
         if filename == self.open_filename:
@@ -149,7 +153,7 @@ class WavWriter(Filter):
             self._writer.setnchannels(self.p_channels)
             self._writer.setsampwidth(2) #always save as signed int16
             self._writer.setframerate(self.p_framerate)
-            self._writer.setnframes(self.p_frames - self.p_in().p_end)
+            self._writer.setnframes(self.p_frames - self.p_in_params.p_end)
 
         self.open_filename = filename
 

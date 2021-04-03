@@ -11,6 +11,10 @@ class Resample(Filter):
         SCIPY_INTERP = 2
         SCIPY_RESAMPLE = 3
 
+    cached_props = {
+        "p_in_params": lambda self,name: None if self.p_in == None else self.p_in()
+    }
+
     auto_attributes = {
         "p_method": Methods.SCIPY_INTERP,
         "p_interp_kind": "linear",
@@ -24,23 +28,25 @@ class Resample(Filter):
     
     @property
     def p_input_framerate(self):
-        if self.p_in == None:
+        if self.p_in_params == None:
             return None
-        return self.p_in().p_framerate
+        return self.p_in_params.p_framerate
     
     @property
     def p_ratio(self):
-        if self.p_in == None:
+        if self.p_in_params == None:
             return None
         return self.p_framerate/self.p_input_framerate
 
     def p_out(self, frames = None, pos = None):
         if self.p_in == None:
             return None
-        
+
         f = self.p_ratio
-        askframes = int(frames/f) if frames != None else None
-        src = self.p_in(askframes, pos)
+        if frames == None:
+            src = self.p_in_params
+        else:
+            src = self.p_in(int(frames/f), pos)
         tmp = src.copy()
         #update start, source_range, framerate, data
         tmp.p_framerate = self.p_framerate
@@ -51,7 +57,6 @@ class Resample(Filter):
         if frames == 0:
             tmp.p_data = np.zeros( (src.p_channels, 0, src.p_frequency_bins) )
             return tmp
-       
 
         if self.p_method == Resample.Methods.SCIPY_INTERP:
             x = np.mgrid[0: 1: 1/frames]
