@@ -24,26 +24,3 @@ class Zeros(Filter):
         tmp.p_data = np.zeros( (self.p_channels, frames, self.p_frequency_bins) ) 
         self.p_pos += frames
         return tmp
-
-class ZeroPadding(Filter):
-    auto_attributes = {
-        "m_in": None
-        }
-    
-    def __init__(self, input = None):
-        Filter.__init__(self)
-        self.p_in = input
-
-    def p_out(self, frames = 0, pos = None):
-        raise NotImplementedError
-        
-        if self.p_in == None:
-            return None
-
-        src = self.p_in(frames,pos)
-
-        # if src.bounds[1] < t1:
-        #     padding = int(src.resolution[1]*(t1-src.bounds[0,1]))
-        #     src.data = np.pad(src.data, [(0,0),(0,padding),(0,0)])
-
-        return src
