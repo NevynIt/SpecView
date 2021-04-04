@@ -1,7 +1,7 @@
 from ..Filter import Filter
 from ..Block import Block
-import wave
 import numpy as np
+import wave
 
 class WavReader(Filter):
     auto_attributes = {

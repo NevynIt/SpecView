@@ -35,4 +35,4 @@ def testWav():
         ww.flush(1024)
     print(ww.p_pos, time.time() - t0)
 
-testWav()
+# testWav()

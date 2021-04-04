@@ -24,4 +24,3 @@ FilterGraph(Filter):
 
 """
 __all__= ["Filters"]
-
