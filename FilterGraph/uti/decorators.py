@@ -1,8 +1,71 @@
+import time
+
+
+class bound_attribute:
+    def __init__(self, owner, name, bindable = True):
+        self.owner = owner
+        self.name = name
+        self.target = None
+        self.bound = False
+        self.bindable = bindable
+        # self.lastupdate = time.time()
+    
+    @property
+    def value(self):
+        if self.bound:
+            return getattr(self.target.owner, self.target.name)
+        else:
+            return self.target
+    
+    @property.setter
+    def value(self, v):
+        # self.lastupdate = time.time()
+        if self.bound:
+            return setattr(self.target.owner, self.target.name, v)
+        else:
+            self.target = v
+    
+    @property
+    def binding(self):
+        if self.bound:
+            return self.target
+        else:
+            return None
+    
+    @property.setter
+    def binding(self, value):
+        if self.bindable:
+            if self.value == None and self.bound == false:
+                return
+            elif self.value == None and self.bound == True:
+                self.bound = False
+                self.target = None
+            elif type(value) == bound_attribute:
+                self.bound = True
+                self.target = value
+            else:
+                self.bound = False
+                self.target = value
+        else:
+            raise AttributeError(f"Attribute {self.name} of object {self.owner} is not bindable")
+
+class binding_helper:
+    def __init__(self, owner, attrs)
+        self.attributes = {}
+        self.owner = owner
+        for name in attrs:
+            self.attributes[name] = bound_attribute(owner, name)
+            self.attributes[name].value = attrs[name]
+
+    def __getattr__(self, name):
+        return bound_attribute(owner, name, False)
+
+
 def multi_setattr(self,attrs):
     for k in attrs:
         setattr(self,k,attrs[k])
 
-def autoinit(*, prebase=None, base=True, pre=None, post=None):
+def autoinit(*, prebase=None, base=True, bindable=None, pre=None, post=None):
     """
     Usage: 
         @autoinit(parameters)
@@ -28,11 +91,19 @@ def autoinit(*, prebase=None, base=True, pre=None, post=None):
 
         old_init = cl.__init__
         
+        if bindable != None:
+            for name in bindable:
+
+            # add attributes for bound properties here if any
+
         def new_init(self, *args, **kwargs):
             if prebase != None:
                 multi_setattr(self,prebase)
             if base == True:
                 base_init(self, *args, **kwargs)
+            if bindable != None:
+                # add bound properties to binding_helper here if any
+                pass
             if pre != None:
                 multi_setattr(self,pre)
             old_init(self, *args, **kwargs)
@@ -43,37 +114,26 @@ def autoinit(*, prebase=None, base=True, pre=None, post=None):
         return cl
     return deco
 
+
 if __name__ == "__main__":
-
-    class ba:
-        def __init__(self):
-            self.baaa = 3
-            print("init base")
-
     @autoinit(
-        post = {
-            "a": 5,
-            "b": 8
+        post={
+            "name": "my test name"
         },
-        pre = {
-            "g": 9
-        },
-        prebase = {
-            "t": 6
-        },
+        bindable={
+            "p_in": None,
+            "p_aname": "noname",
+            "p_jack": 12
+        }
     )
-    class pippo(ba):
-        def __autoinit_base__(self, pio = 2):
-            print("pippo autoinit base - pre")
-            super(pippo,self).__init__()
-            print("pippo autoinit base - post")
+    class test:
+        pass
 
-        def __init__(self, pio = 5):
-            print("init pippo")
-            self.pi = pio
-
-    p = pippo()
-    print(p)
-
-    p = pippo(3)
-    print(p)
+    t1 = test1
+    t2 = test2
+    t2._bind.p_aname = t1._bind.name
+    t2._bind.p_in = 55
+    t2.p_jack = 43
+    print(t2.p_aname)
+    print(t2.p_in)
+    print(t2.p_jack)
