@@ -1,71 +1,6 @@
 import time
 
-
-class bound_attribute:
-    def __init__(self, owner, name, bindable = True):
-        self.owner = owner
-        self.name = name
-        self.target = None
-        self.bound = False
-        self.bindable = bindable
-        # self.lastupdate = time.time()
-    
-    @property
-    def value(self):
-        if self.bound:
-            return getattr(self.target.owner, self.target.name)
-        else:
-            return self.target
-    
-    @property.setter
-    def value(self, v):
-        # self.lastupdate = time.time()
-        if self.bound:
-            return setattr(self.target.owner, self.target.name, v)
-        else:
-            self.target = v
-    
-    @property
-    def binding(self):
-        if self.bound:
-            return self.target
-        else:
-            return None
-    
-    @property.setter
-    def binding(self, value):
-        if self.bindable:
-            if self.value == None and self.bound == false:
-                return
-            elif self.value == None and self.bound == True:
-                self.bound = False
-                self.target = None
-            elif type(value) == bound_attribute:
-                self.bound = True
-                self.target = value
-            else:
-                self.bound = False
-                self.target = value
-        else:
-            raise AttributeError(f"Attribute {self.name} of object {self.owner} is not bindable")
-
-class binding_helper:
-    def __init__(self, owner, attrs)
-        self.attributes = {}
-        self.owner = owner
-        for name in attrs:
-            self.attributes[name] = bound_attribute(owner, name)
-            self.attributes[name].value = attrs[name]
-
-    def __getattr__(self, name):
-        return bound_attribute(owner, name, False)
-
-
-def multi_setattr(self,attrs):
-    for k in attrs:
-        setattr(self,k,attrs[k])
-
-def autoinit(*, prebase=None, base=True, bindable=None, pre=None, post=None):
+class autoinit:
     """
     Usage: 
         @autoinit(parameters)
@@ -74,11 +9,89 @@ def autoinit(*, prebase=None, base=True, bindable=None, pre=None, post=None):
         if __autoinit_base__ is defined, it will be called to initialize base classes, and then removed from the class
     """
 
-    def deco(cl):
+    class binding_helper_instance:
+        def __init__(self, owner):
+            self.owner = owner
+
+        def __add_attribute(self,name,attrib):
+            object.__setattr__(self, name, attrib)
+
+        def __add_bindable(self,name,default_value=None):
+            self.__add_attribute(name, bindable_attribute(self.owner, name, default_value))
+
+        def __getattr__(self, name):
+            return bound_attribute(owner, name)
+        
+        def __setattr__(self, name, value):
+            object.__getattribute__(self, name).binding = value
+
+    class bound_attribute:
+        def __init__(self, owner, name):
+            self.owner = owner
+            self.name = name
+        
+        @property
+        def value(self):
+            return getattr(self.owner, self.name)
+
+    class bindable_attribute(bound_attribute):
+        def __init__(self, owner, name, default = None):
+            self.owner = owner
+            self.name = name
+            self.target = self.default = default
+            self.bound = False
+        
+        @property
+        def value(self):
+            if self.bound:
+                return self.target.value
+            else:
+                return self.target
+        
+        @property.setter
+        def value(self, v):
+            if self.bound:
+                self.target.value = v
+            else:
+                self.target = v
+        
+        @property
+        def binding(self):
+            if self.bound:
+                return self.target
+            else:
+                return None
+        
+        @property.setter
+        def binding(self, value):
+            if value == None:
+                if self.bound == True:
+                    self.bound = False
+                    self.target = self.default
+            elif issubclass(type(value), autoinit.bound_attribute):
+                self.bound = True
+                self.target = value
+            else:
+                self.bound = False
+                self.target = value
+
+    @classmethod
+    def multi_setattr(obj,attrs):
+        for k in attrs:
+            setattr(obj,k,attrs[k])
+
+    def __init__(self, *, prebase=None, base=True, bindable=None, pre=None, post=None):
+        self.prebase = prebase
+        self.base = base
+        self.bindable = bindable
+        self.pre = pre
+        self.post = post
+
+    def __call__(self,cl):
         def default__autoinit_base__(self, *args, **kwargs):
             super(cl,self).__init__(self)
         
-        if base == True:
+        if self.base == True:
             if hasattr(cl,"__autoinit_base__"):
                 base_init = cl.__autoinit_base__
                 #remove autoinit_base so that it is not called again in subclasses
@@ -89,31 +102,30 @@ def autoinit(*, prebase=None, base=True, bindable=None, pre=None, post=None):
             #send out some kind of warning!
             print("WARNING: autoinit decorator found __autoinit_base__ without base==True. This could cause problems in subclasses.")
 
-        old_init = cl.__init__
+        class_init = cl.__init__
+
+        for name in self.bindable:
+            setattr(cl,name) = property(
+                fget = (lambda self: getattr(self._bound,name).value),
+                fset = (lambda self, value: getattr(self._bound,name).value = value)
+                )
+
+        def __init__instance__(instance, *args, **kwargs)
+            if self.prebase != None:
+                autoinit.multi_setattr(instance,self.prebase)
+            if self.base == True:
+                self.base_init(cl, instance, *args, **kwargs)
+            if self.bindable != None:
+                instance._bound = getattr(instance, "_bound", binding_helper_instance(instance))
+                for name, default_value in self.bindable.items():
+                    instance._bound.__add_bindable(name, default_value))
+            if self.pre != None:
+                autoinit.multi_setattr(instance,pre)
+            self.class_init(instance, *args, **kwargs)
+            if self.post != None:
+                autoinit.multi_setattr(instance,self.post)
         
-        if bindable != None:
-            for name in bindable:
-
-            # add attributes for bound properties here if any
-
-        def new_init(self, *args, **kwargs):
-            if prebase != None:
-                multi_setattr(self,prebase)
-            if base == True:
-                base_init(self, *args, **kwargs)
-            if bindable != None:
-                # add bound properties to binding_helper here if any
-                pass
-            if pre != None:
-                multi_setattr(self,pre)
-            old_init(self, *args, **kwargs)
-            if post != None:
-                multi_setattr(self,post)
-
-        cl.__init__ = new_init
-        return cl
-    return deco
-
+        return __init__instance__
 
 if __name__ == "__main__":
     @autoinit(
