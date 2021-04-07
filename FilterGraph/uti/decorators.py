@@ -76,6 +76,13 @@ class autoinit:
             else:
                 return None
         
+        def check_circular_binding(self, tgt):
+            if tgt is self:
+                #TODO: use a different exception type
+                raise AttributeError("Circular binding")
+            if self.bound:
+                self.target.check_circular_binding(tgt)
+
         @binding.setter
         def binding(self, value):
             if value is self:
@@ -87,12 +94,7 @@ class autoinit:
                 self.bound = False
                 self.target = self.default
             elif issubclass(type(value), autoinit.bound_attribute):
-                #check for loops here
-                cur = value
-                while issubclass(type(cur), autoinit.bindable_attribute):
-                    cur = cur.binding
-                    if cur is self:
-                        raise AttributeError("Circular binding")
+                value.check_circular_binding(self)
                 self.bound = True
                 self.target = value
                 self.target.add_trigger(self.call_triggers, id(self))
@@ -105,10 +107,14 @@ class autoinit:
 
     class cached_attribute(bound_attribute):
         def __init__(self, actual_get):
+            self.targets = []
             self.triggers = {}
             self.calculate = actual_get
             self.cache = None
             self.valid = False
+
+        def add_target(self, tgt):
+            self.targets.append(tgt)
 
         def add_trigger(self, fnc, key=None):
             if key == None:
@@ -133,6 +139,13 @@ class autoinit:
                 self.cache = self.calculate()
                 self.valid = True
             return self.cache
+
+        def check_circular_binding(self, tgt):
+            if tgt is self:
+                #TODO: use a different exception type
+                raise AttributeError("Circular binding")
+            for target in self.targets:
+                target.check_circular_binding(tgt)
 
     class bound_descriptor:
         def __init__(self, name):
@@ -172,17 +185,11 @@ class autoinit:
         class_init = cl.__init__
 
         for name in self.bindable:
-            setattr(cl, name, property(
-                fget = (lambda self: getattr(self._bound, name).value),
-                fset = (lambda self, value: setattr(getattr(self._bound,name),"value" ,value))
-                )
-            )
+            setattr(cl, name, autoinit.bound_descriptor(name))
         
         for name in self.cached:
             setattr(cl,name + "__actual_get", getattr(cl,name))
-            setattr(cl,name, property(
-                fget = (lambda self: getattr(self._bound,name).value)
-            ))
+            setattr(cl,name, autoinit.bound_descriptor(name))
 
         def __init__instance__(instance, *args, **kwargs):
             if self.prebase != None:
@@ -201,7 +208,9 @@ class autoinit:
                     if type(dependencies) == str:
                         dependencies = (dependencies, )
                     for dep in dependencies:
-                        getattr(instance._bound, dep).add_trigger(attr.invalidate)
+                        tgt = getattr(instance._bound, dep)
+                        attr.add_target(tgt)
+                        tgt.add_trigger(attr.invalidate)
             if self.triggers != None:
                 for name, methods in self.triggers.items():
                     if type(methods) == str:
@@ -257,7 +266,8 @@ if __name__ == "__main__":
             print(f"bindable_c has changed: {self.bindable_c=}")
         
         def on_cached_a_b(self):
-            print(f"cached_a_b has changed: {self.cached_a_b=}")
+            #print(f"cached_a_b has changed: {self.cached_a_b=}")
+            pass
 
         def baseinit(self):
             print(f"before baseclass init: {self.__dict__=}")
@@ -267,11 +277,11 @@ if __name__ == "__main__":
     t1 = test()
     t2 = test()
     t2._bound.bindable_b = t1._bound.cached_a_b
-    t1.on_bindable_a = 5
-    t1.on_bindable_c = 9
+    t1.bindable_a = 5
+    t1.bindable_c = 9
     t1._bound.bindable_a = t1._bound.bindable_b
     t1._bound.bindable_b = t1._bound.bindable_c
     t1._bound.bindable_c = t2._bound.bindable_a
-    t2._bound.bindable_a = t2._bound.bindable_b
+    t2._bound.bindable_a = t2._bound.bindable_b #this should raise a circular binding exception
     t2._bound.bindable_b = t2._bound.bindable_c
-    t2._bound.bindable_c = t1._bound.bindable_a #this should raise a circular binding exception
+    t2._bound.bindable_c = t1._bound.bindable_a 
