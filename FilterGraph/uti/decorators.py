@@ -1,10 +1,20 @@
+import inspect
+
 class autoinit:
     """
     Usage: 
         @autoinit(parameters)
-        class ...
-
-        if __autoinit_base__ is defined, it will be called to initialize base classes, and then removed from the class
+        parameters are:
+            prebase = { "attribute name": value to be set before initialising base classes, ...}
+            base = True -> call __init__ on super(...) with no parameters, "method name" -> call the method with all parameters given to init (the method is supposed to init the base class)
+            bindable = { "bindable attribute name": default value, ...}
+            cached = { "cached attribute name": ("name of bindable attribute whose update invalidates the cache", ...), ... }
+                NOTE: there has to be a method with the same name of the cached attribute, with no parameters, which is used to calculate the cached value upon update of the dependencies
+            triggers = { "bindable or cached attribute name": ("name of method to ba called as soon as the value is updated or invalidated", ...), ... }
+                NOTE: the method is called with no parameters, after the update/invalidation is done
+            pre = { "attribute name": value to be set before calling __init__, ...}
+            post = { "attribute name": value to be set after calling __init__, ...}
+        NOTE: The order of the parameters here is the order in which things are applied to the class
     """
 
     class binding_helper_instance:
@@ -184,6 +194,11 @@ class autoinit:
 
         class_init = cl.__init__
 
+        #check if the init function was actually inherited and thus irrelevant
+        mro = inspect.getmro(cl)
+        if cl.__init__ is mro[1].__init__:
+            class_init = None
+
         for name in self.bindable:
             setattr(cl, name, autoinit.bound_descriptor(name))
         
@@ -219,7 +234,8 @@ class autoinit:
                         getattr(instance._bound, name).add_trigger(getattr(instance,method))
             if self.pre != None:
                 autoinit.multi_setattr(instance,self.pre)
-            class_init(instance, *args, **kwargs)
+            if class_init != None:
+                class_init(instance, *args, **kwargs)
             if self.post != None:
                 autoinit.multi_setattr(instance,self.post)
         
@@ -256,8 +272,8 @@ if __name__ == "__main__":
         }
     )
     class test(baseclass):
-        def __init__(self):
-            print(f"test init: {self.__dict__=}")
+        # def __init__(self):
+        #     print(f"test init: {self.__dict__=}")
         
         def cached_a_b(self):
             return self.bindable_a + self.bindable_b
@@ -266,7 +282,7 @@ if __name__ == "__main__":
             print(f"bindable_c has changed: {self.bindable_c=}")
         
         def on_cached_a_b(self):
-            #print(f"cached_a_b has changed: {self.cached_a_b=}")
+            print(f"cached_a_b has changed: {self.cached_a_b=}")
             pass
 
         def baseinit(self):
@@ -282,6 +298,7 @@ if __name__ == "__main__":
     t1._bound.bindable_a = t1._bound.bindable_b
     t1._bound.bindable_b = t1._bound.bindable_c
     t1._bound.bindable_c = t2._bound.bindable_a
-    t2._bound.bindable_a = t2._bound.bindable_b #this should raise a circular binding exception
-    t2._bound.bindable_b = t2._bound.bindable_c
-    t2._bound.bindable_c = t1._bound.bindable_a 
+    try:
+        t2._bound.bindable_a = t2._bound.bindable_b #this should raise a circular binding exception
+    except AttributeError:
+        print("Exception as expected")
