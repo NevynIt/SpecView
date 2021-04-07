@@ -1,4 +1,4 @@
-import time
+import weakref
 
 class autoinit:
     """
@@ -13,13 +13,11 @@ class autoinit:
         def __init__(self, owner):
             self.owner = owner
 
-        def __add_attribute(self,name,attrib):
-            object.__setattr__(self, name, attrib)
-
-        def __add_bindable(self,name,default_value=None):
-            self.__add_attribute(name, bindable_attribute(self.owner, name, default_value))
+        def __set_attribute(self, name, value):
+            object.__setattr__(self, name, value)
 
         def __getattr__(self, name):
+            #this is called only if the object is not in __dict__
             return bound_attribute(owner, name)
         
         def __setattr__(self, name, value):
@@ -35,26 +33,39 @@ class autoinit:
             return getattr(self.owner, self.name)
 
     class bindable_attribute(bound_attribute):
-        def __init__(self, owner, name, default = None):
-            self.owner = owner
-            self.name = name
+        def __init__(self, default = None):
+            self.triggers = weakref.WeakValueDictionary()
             self.target = self.default = default
             self.bound = False
-        
+
+        def add_trigger(fnc, key=None):
+            if key == None:
+                key = id(fnc)
+            self.triggers[key] = fnc
+
+        def del_trigger(key):
+            del self.triggers[key]
+
+        def call_trigger():
+            for fnc in self.triggers.values:
+                fnc()
+
+
         @property
         def value(self):
             if self.bound:
                 return self.target.value
             else:
                 return self.target
-        
+
         @property.setter
         def value(self, v):
             if self.bound:
                 self.target.value = v
             else:
                 self.target = v
-        
+            self.call_trigger()
+
         @property
         def binding(self):
             if self.bound:
@@ -74,16 +85,18 @@ class autoinit:
             else:
                 self.bound = False
                 self.target = value
+            self.call_trigger()
 
     @classmethod
     def multi_setattr(obj,attrs):
         for k in attrs:
             setattr(obj,k,attrs[k])
 
-    def __init__(self, *, prebase=None, base=True, bindable=None, pre=None, post=None):
+    def __init__(self, *, prebase=None, base=True, bindable=None, triggers=None, pre=None, post=None):
         self.prebase = prebase
         self.base = base
         self.bindable = bindable
+        self.triggers = triggers
         self.pre = pre
         self.post = post
 
@@ -118,7 +131,13 @@ class autoinit:
             if self.bindable != None:
                 instance._bound = getattr(instance, "_bound", binding_helper_instance(instance))
                 for name, default_value in self.bindable.items():
-                    instance._bound.__add_bindable(name, default_value))
+                    instance._bound.__set_attribute(name,  bindable_attribute(self, name, default_value))
+            if self.triggers != None:
+                for name, methods in self.triggers.items():
+                    if type(methods) == str:
+                        methods = (methods, )
+                    for method in methods:
+                        getattr(instance._bound, name).add_trigger(getattr(instance,method))
             if self.pre != None:
                 autoinit.multi_setattr(instance,pre)
             self.class_init(instance, *args, **kwargs)
