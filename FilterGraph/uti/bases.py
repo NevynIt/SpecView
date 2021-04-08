@@ -2,41 +2,92 @@ from autoinit import autoinit
 import numpy as np
 import enum, copy
 
-class frequency_scales(enum.Enum):
-    NONE = 0
-    LINEAR = 1
-    LOGARITMIC = 2
-
 @autoinit(
     pre={
-        "channels": 0,
-        "framerate": 0,
-        "freq_bins": 0,
-        "freq_scale": frequency_scales.NONE,
-        "nyquist": 0,
-        "framerange": 
+        "name": None,
+        "entries": 0,
+        "start": 0,
+        "end": 0,
+        "scale": None
     }
 )
-class Descriptor:
-    def copy(self):
-        return copy.copy(self)
+class Axis:
+    pass
 
 class Source:
-    def read(nframes: int):
+    def read(entries, advance = True):
         raise NotImplementedError
     
     @property
     def descriptor(self):
         raise NotImplementedError
     
-    def seek(self, pos: int):
+    def seek(self, pos, absolute = True):
         raise NotImplementedError
     
-    def tell(self) -> int:
-        
+    def tell(self):
+        raise NotImplementedError
+    
+    @property
+    def position(self):
+        return self.tell()
+
+    @position.setter
+    def position(self, value):
+        self.seek(value)
 
 class Sink:
-    pass
+    def write(signal, advance = True):
+        raise NotImplementedError
+    
+    @property
+    def descriptor(self):
+        raise NotImplementedError
+    
+    def seek(self, pos, absolute = True):
+        raise NotImplementedError
+    
+    def tell(self):
+        raise NotImplementedError
+    
+    @property
+    def position(self):
+        return self.tell()
+
+    @position.setter
+    def position(self, value):
+        self.seek(value)
 
 class Transform:
-    pass
+    @property
+    def direction(self):
+        raise NotImplementedError
+    
+    @direction.setter
+    def direction(self, value):
+        raise NotImplementedError
+    
+    @property
+    def descriptor(self):
+        raise NotImplementedError
+
+    def pump(self, entries):
+        raise NotImplementedError
+    
+    def seek(self, pos, absolute = True):
+        raise NotImplementedError
+    
+    def tell(self):
+        raise NotImplementedError
+    
+    @property
+    def position(self):
+        return self.tell()
+
+    @position.setter
+    def position(self, value):
+        self.seek(value)
+
+if __name__ == "__main__":
+    a = Axis()
+    print(1)

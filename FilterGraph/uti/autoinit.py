@@ -172,18 +172,19 @@ class autoinit:
         for k in attrs:
             setattr(obj,k,attrs[k])
 
-    def __init__(self, *, prebase=None, base=True, bindable=None, cached=None, triggers=None, pre=None, post=None):
+    def __init__(self, *, prebase=None, base=True, bindable=None, cached=None, triggers=None, pre=None, args=None, post=None):
         self.prebase = prebase
         self.base = base
         self.bindable = bindable
         self.cached = cached
         self.triggers = triggers
         self.pre = pre
+        self.args = args
         self.post = post
 
     def __call__(self,cl):
         if self.base == True:
-            base_init = super(cl).__init__
+            base_init = super(cl, cl).__init__
         elif type(self.base) == str:
             base_init = getattr(cl, self.base)
         else:
@@ -194,12 +195,14 @@ class autoinit:
         else:
             class_init = None
 
-        for name in self.bindable:
-            setattr(cl, name, autoinit.bound_descriptor(name))
+        if self.bindable != None:
+            for name in self.bindable:
+                setattr(cl, name, autoinit.bound_descriptor(name))
         
-        for name in self.cached:
-            setattr(cl,name + "__actual_get", getattr(cl,name))
-            setattr(cl,name, autoinit.bound_descriptor(name))
+        if self.cached != None:
+            for name in self.cached:
+                setattr(cl,name + "__actual_get", getattr(cl,name))
+                setattr(cl,name, autoinit.bound_descriptor(name))
 
         def __init__instance__(instance, *args, **kwargs):
             if self.prebase != None:
@@ -231,6 +234,13 @@ class autoinit:
                         getattr(instance._bound, name).add_trigger(getattr(instance,method))
             if self.pre != None:
                 autoinit.multi_setattr(instance,self.pre)
+            if self.args != None:
+                tmp = dict(self.args)
+                keys = list(tmp.keys())
+                for i in range(len(*args)):
+                    tmp[keys[i]] = args[i]
+                for name, value in tmp.items():
+                    setattr(instance, name, value)
             if class_init != None:
                 class_init(instance, *args, **kwargs)
             if self.post != None:
