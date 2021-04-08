@@ -1,26 +1,48 @@
 """
-Classes to be created
-Filter:
-    has a number of input ports - callable object or bound property
-    has a number of output ports - method, callable object or bound property
-    has a number of parameters
-    Serialize(target)
-    DeSerialize(source)
+Classes:
+    Axis
+        name -> channel, time, frequency, power (maybe others in the future)
+        entries -> number of entries available in the axis, can be 0 to say no entries are available (read always returns an empty signal, write always returns 0) or -1 to say the axiss is not constrained
+        start -> the value at the left of index 0 in this axis
+        end -> the value to the right of the last index in this axis
+        scale -> linear or log, used to calculate the values right or left of any other index
 
-Port is a callable with args(t0, timerange):
-        get enough from the inputs to be able to create the output (it could get less than what it needs)
-        elaborate
-        return a block containing timerange or less data (in case not enough data were available)
+    Descriptor
+        is a list of axes - one of them MUST be time (maybe???)
+        the last represents the meaning of the stored value itself
+        axes names should not be repeated
 
-SignalBlock:
-    data: a 3D numpy matrix with shape [signal channels, time, freq/tone] and values between 0 and 1
-    domain: "freq" or "tone" (or maybe others in the future)
-    bounds: a 3x2 matrix with min/max for each dimension. e.g. bounds[0,0] is min channel number, bounds[2,0] is min time, bounds[3,1] is max frequency
+    Source
+        [sources] - defined slots for source(s), if any, class dependent
+        read(nframes) -> Signal - gets what it needs from sources and returns a signalblock of nframes lenght in time - if nframes is none, reads as much as possible from pos
+        descriptor - returns a descriptor with information about what kind of signalblock will be sent with the current setup (in terms of connections and parameters)
+        seek(pos) - also seeks on the sources to get to the required position
+        tell() -> pos
+        EOF -> true or false
+        @property position
 
-FilterGraph(Filter):
-    Contains a set of filters
+    Sink
+        [sinks] - defined slots for sink(s), if any, class dependent
+        write(Signal) -> number of frames written
+        seek(pos) - also seeks on the sinks to prepare them to the required position
+        tell() -> pos
+        @property position
 
-
+    Transform - combination of a source and a sink
+        [sources] - defined slots for source(s), if any, class dependent
+            when the direction is sink, the object returned from each of these defined sources are sinks
+            when the direction is source or pump, these object can and should be bound to sources
+            when the direction is none, nothing can be bound
+        [sinks] - defined slots for sink(s), if any, class dependent
+            when the direction is source, the object returned from each of these defined sinks are sources
+            when the direction is sink or pump, these object can and should be bound to other sinks
+            when the direction is none, nothing can be bound
+        direction -> none, source, sink or pump
+        pump(nframes)
+        seek(pos)
+        tell() -> pos
+        @property position
 
 """
+from uti.autoinit import autoinit
 __all__= ["Filters"]

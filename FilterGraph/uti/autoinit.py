@@ -1,4 +1,4 @@
-import inspect
+#I HAVE COPIED THE FILE IN THE PYTHON PATH!!!!!!!! THAT is the one actually imported
 
 class autoinit:
     """
@@ -6,7 +6,7 @@ class autoinit:
         @autoinit(parameters)
         parameters are:
             prebase = { "attribute name": value to be set before initialising base classes, ...}
-            base = True -> call __init__ on super(...) with no parameters, "method name" -> call the method with all parameters given to init (the method is supposed to init the base class)
+            base = True -> call super(...).__init__ with no parameters, "method name" -> call the method with all parameters given to init (the method is supposed to init the base class)
             bindable = { "bindable attribute name": default value, ...}
             cached = { "cached attribute name": ("name of bindable attribute whose update invalidates the cache", ...), ... }
                 NOTE: there has to be a method with the same name of the cached attribute, with no parameters, which is used to calculate the cached value upon update of the dependencies
@@ -182,21 +182,16 @@ class autoinit:
         self.post = post
 
     def __call__(self,cl):
-        def default__autoinit_base__(self, *args, **kwargs):
-            super(cl,self).__init__(self)
-        
         if self.base == True:
-            base_init = default__autoinit_base__
+            base_init = super(cl).__init__
         elif type(self.base) == str:
             base_init = getattr(cl, self.base)
         else:
             base_init = None
 
-        class_init = cl.__init__
-
-        #check if the init function was actually inherited and thus irrelevant
-        mro = inspect.getmro(cl)
-        if cl.__init__ is mro[1].__init__:
+        if not cl.__init__ is super(cl, cl).__init__:
+            class_init = cl.__init__
+        else:
             class_init = None
 
         for name in self.bindable:
@@ -209,7 +204,9 @@ class autoinit:
         def __init__instance__(instance, *args, **kwargs):
             if self.prebase != None:
                 autoinit.multi_setattr(instance,self.prebase)
-            if base_init != None:
+            if self.base == True:
+                base_init(instance)
+            elif type(self.base) == str:
                 base_init(instance, *args, **kwargs)
             if self.bindable != None:
                 instance._bound = getattr(instance, "_bound", autoinit.binding_helper_instance(instance))
