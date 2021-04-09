@@ -393,7 +393,7 @@ if __name__ == "__main__":
         t1.cached_a_b = 1234
         print("Exception missed!")
     except Exception as e:
-        print(f"Exception as expected {e=}") 
+        print(f"Readonly as expected {e=}") 
 
     t2._bound.bindable_b = t1._bound.cached_a_b
     t1.bindable_a = 5
@@ -401,20 +401,28 @@ if __name__ == "__main__":
     t1._bound.bindable_a = t1._bound.bindable_b
     t1._bound.bindable_b = t1._bound.bindable_c
     t1._bound.bindable_c = t2._bound.bindable_a
+    
+    try:
+        t1._bound.bindable_c = property_store.attribute_reference(t1, "bindable_a")
+        print("Exception missed!")
+    except Exception as e:
+        print(f"Circular as expected {e=}") 
+
+
     try:
         t2._bound.bindable_a.binding = t2._bound.bindable_b #this should raise a circular binding exception
         print("Exception missed!")
     except Exception as e:
-        print(f"Exception as expected {e=}") 
+        print(f"Circular as expected {e=}") 
 
     try:
         t1._bound.bindable_b = t2._bound.pre_val
         print("Exception missed!")
     except Exception as e:
-        print(f"Exception as expected {e=}") 
+        print(f"Ractive as expected {e=}") 
     
     try:
         t2._bound.bindable_a.binding = property_store.attribute_reference(t2, "bindable_b")
         print("Exception missed!")
     except Exception as e:
-        print(f"Exception as expected {e=}") 
+        print(f"Ractive as expected {e=}") 
