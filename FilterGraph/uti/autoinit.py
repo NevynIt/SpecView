@@ -279,8 +279,8 @@ if __name__ == "__main__":
         }
     )
     class test(baseclass):
-        # def __init__(self):
-        #     print(f"test init: {self.__dict__=}")
+        def __init__(self):
+            print(f"test init: {self.__dict__=}")
         
         def cached_a_b(self):
             return self.bindable_a + self.bindable_b
