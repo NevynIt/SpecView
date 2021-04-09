@@ -1,10 +1,19 @@
 import types
 
+__all__ = ("property_store", "trigger", "call", "assign")
+
 class property_store:
     class instance_helper:
-        def __init__(self, descriptor, instance):
-            for k, v in descriptor.slots:
-                setattr(self, k, type(v).instance_helper(v, instance))
+        def create_slots(self, descriptor):
+            for k, v in descriptor.slots.items():
+                vars(self)[k] = type(v).instance_helper(v)
+
+        def init_slots(self, descriptor, instance):
+            for k, v in descriptor.slots.items():
+                getattr(self, k).init_instance(v, instance)
+
+        def __setattr__(self, name, value):
+            getattr(self, name).binding = value
 
     def __init__(self):
         self.name = None
@@ -12,7 +21,10 @@ class property_store:
 
     def __get__(self, instance, owner=None):
         if not self.name in vars(instance):
-            vars(instance)[self.name] = property_store.instance_helper(self, instance)
+            store = property_store.instance_helper()
+            vars(instance)[self.name] = store
+            store.create_slots(self)
+            store.init_slots(self, instance)
         return vars(instance)[self.name]
     
     def __set_name__(self, owner, name):
@@ -21,21 +33,23 @@ class property_store:
         self.name = name
     
     def observable(self, default_value = None):
-        return observable(default_value, self)
+        return observable(self, default_value)
     
     def bindable(self, default_value = None):
-        return bindable(default_value, self)
+        return bindable(self, default_value)
     
     def cached(self, *args, getter = None):
         "returns a decorator that creates a cached property that is invalidated when any of the observables passed as arguments is modified"
-        return cached(self, *args, getter = None)
+        return cached(*args, getter = None, store=self)
 
 class observable:
     class instance_helper:
-        def __init__(self, descriptor, instance):
+        def __init__(self, descriptor):
             self._value = descriptor.default_value
-            self.observers = []
-            for k, v in descriptor.observers:
+            self.observers = {}
+        
+        def init_instance(self, descriptor, instance):
+            for k, v in descriptor.observers.items():
                 self.observers[k] = types.MethodType(v, instance)
 
         @property
@@ -65,7 +79,7 @@ class observable:
     def __init__(self, store, default_value = None):
         self.store = store
         self.default_value = default_value
-        self.observers = []
+        self.observers = {}
     
     def __set_name__(self, owner, name):
         self.name = name
@@ -87,12 +101,12 @@ class observable:
     def __set__(self, instance, value):
         store = getattr(instance, self.store.name)
         slot = getattr(store, self.name)
-        slot.value = v
+        slot.value = value
 
 class bindable(observable):
     class instance_helper(observable.instance_helper):
-        def __init__(self, descriptor, instance):
-            super().__init__(descriptor, instance)
+        def __init__(self, descriptor):
+            super().__init__(descriptor)
             self.bound = False
             self.default_value = descriptor.default_value
 
@@ -132,7 +146,7 @@ class bindable(observable):
                     self._value.del_observer(id(self))
                 self.bound = False
                 self._value = self.default_value
-            elif isinstance(value, observable):
+            elif isinstance(value, observable.instance_helper):
                 value.check_circular_binding(self)
                 if self.bound == True:
                     self._value.del_observer(id(self))                
@@ -149,10 +163,14 @@ class bindable(observable):
 class cached(observable):
     "the class works both as a class and a descriptor"
     class instance_helper(observable.instance_helper):
-        def __init__(self, descriptor, instance):
-            super().__init__(descriptor, instance)
+        def __init__(self, descriptor):
+            super().__init__(descriptor)
             self.valid = False
             self.dependencies = []
+        
+        def init_instance(self, descriptor, instance):
+            super().init_instance(descriptor, instance)
+            self.getter = types.MethodType(descriptor.getter, instance)
             for dep in descriptor.dependencies:
                 if not isinstance(dep, observable):
                     raise TypeError
@@ -170,7 +188,7 @@ class cached(observable):
         @property
         def value(self):
             if not self.valid:
-                self.cache = self.calculate()
+                self.cache = self.getter()
                 self.valid = True
             return self.cache
 
@@ -181,7 +199,7 @@ class cached(observable):
             for dep in self.dependencies:
                 dep.check_circular_binding(tgt)
 
-    def __init__(self, store, *dependencies, getter = None):
+    def __init__(self, *dependencies, store, getter = None):
         super().__init__(store)
         self.dependencies = dependencies
         self.getter = getter
@@ -194,7 +212,7 @@ def trigger(*args):
     "decorator that binds a call to the method every time the observables in args are modified"
     def decorate(fnc):
         for obs in args:
-            if isinstance(obj, observable):
+            if isinstance(obs, observable):
                 obs.add_observer(fnc)
             else:
                 raise TypeError
@@ -212,13 +230,27 @@ def call(function_to_call, *, args=(), kwargs={}, append=False):
             if append:
                 function_to_call(self, *(inner_args if args == None else args), **(inner_kwargs if kwargs == None else kwargs))
             return retval
+        return decorated_function
     return decorate
 
-def __base_init(self, *inner_args, **inner_kwargs):
-    super().__init__(*inner_args, **inner_kwargs)
+#TODO:
+# def __base_init(self, *inner_args, **inner_kwargs):
+#     super().__init__(*inner_args, **inner_kwargs)
 
-def baseinit(*, args=(), kwargs={}, append=False):
-    return call(__base_init, args=args, kwargs=kwargs, append=append)
+# def baseinit(*, args=(), kwargs={}, append=False):
+#     return call(__base_init, args=args, kwargs=kwargs, append=append)
+
+def assign(**kwargs):
+    def decorate(fnc):
+        def decorated_function(self, *inner_args, **inner_kwargs):
+            for k,v in kwargs.items():
+                setattr(self,k,v)
+            return fnc(self,*inner_args, **inner_kwargs)
+        return decorated_function
+    return decorate
+
+def assignargs(**kwargs):
+    raise NotImplementedError
 
 if __name__ == "__main__":
     class baseclass:
@@ -236,21 +268,14 @@ if __name__ == "__main__":
             baseclass.__init__(self)
             print(f"after baseclass init: {self.__dict__=}")
 
-        @assign(dict(
-            prebase_val = 1
-        ))
+        @assign(prebase_val = 1)
         @call(baseinitial)
-        @baseinit
-        @assign(dict(
-            pre_val = 5
-        ))
-        @assign(dict(
-            post_val = 6
-        ), append = True)
+        # @baseinit()
+        @assign(pre_val = 5)
         def __init__(self):
             print(f"test init: {self.__dict__=}")
         
-        @cached(bindable_a, bindable_b)
+        @_bound.cached(bindable_a, bindable_b)
         def cached_a_b(self):
             return self.bindable_a + self.bindable_b
 
@@ -273,6 +298,6 @@ if __name__ == "__main__":
     t1._bound.bindable_b = t1._bound.bindable_c
     t1._bound.bindable_c = t2._bound.bindable_a
     try:
-        t2._bound.bindable_a = t2._bound.bindable_b #this should raise a circular binding exception
+        t2._bound.bindable_a.binding = t2._bound.bindable_b #this should raise a circular binding exception
     except AttributeError:
         print("Exception as expected")
