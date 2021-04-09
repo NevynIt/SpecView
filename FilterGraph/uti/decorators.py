@@ -1,5 +1,12 @@
 import types
 
+#TODO: 
+#       implement chain of reactive property to ensure at run time that the observable properties on which a cacheable depend on are always reactive
+#       when a cached is created or alerted that a property has been modified, it should also check all deps are reactive
+#       A bound property is not reactive if it is bound to a non-reactive observable
+#       getattr of a store should also be updated to return a non reactive observable bound to any attribute of the same instance the store is linked to
+#       update the hierarchy to make the observable -> reactive -> bindable|cached
+
 __all__ = ("property_store", "trigger", "call", "assign")
 
 class property_store:
@@ -9,11 +16,18 @@ class property_store:
                 vars(self)[k] = type(v).instance_helper(v)
 
         def init_slots(self, descriptor, instance):
+            self.instance = instance
             for k, v in descriptor.slots.items():
                 getattr(self, k).init_instance(v, instance)
 
+        # def __getattr__(self,name):
+        #     #Update to return a non reactive bound to instance.name
+
         def __setattr__(self, name, value):
-            getattr(self, name).binding = value
+            if isinstance(getattr(self, name), bindable):
+                getattr(self, name).binding = value
+            else:
+                raise AttributeError(f"{name} is not a bindable property")
 
     def __init__(self):
         self.name = None
@@ -32,20 +46,21 @@ class property_store:
             raise RuntimeError
         self.name = name
     
-    def observable(self, default_value = None):
-        return observable(self, default_value)
+    def observable(self, *args, **kwargs):
+        return observable(*args, **kwargs, store=self)
     
-    def bindable(self, default_value = None):
-        return bindable(self, default_value)
+    def bindable(self, *args, **kwargs):
+        return bindable(*args, **kwargs, store=self)
     
-    def cached(self, *args, getter = None):
+    def cached(self, *args, **kwargs):
         "returns a decorator that creates a cached property that is invalidated when any of the observables passed as arguments is modified"
-        return cached(*args, getter = None, store=self)
+        return cached(*args, **kwargs, store=self)
 
 class observable:
     class instance_helper:
         def __init__(self, descriptor):
             self._value = descriptor.default_value
+            self.reactive = descriptor.reactive
             self.observers = {}
         
         def init_instance(self, descriptor, instance):
@@ -59,7 +74,8 @@ class observable:
         @value.setter
         def value(self, v):
             self._value = v
-            self.alert()
+            if self.reactive: #should not be a if, should be another class
+                self.alert()
 
         def check_circular_binding(self, tgt):
             pass
@@ -76,10 +92,12 @@ class observable:
             for fnc in self.observers.values():
                 fnc()
 
-    def __init__(self, store, default_value = None):
+    def __init__(self, default_value = None, *, store = None, reactive = True, readonly = False):
         self.store = store
         self.default_value = default_value
         self.observers = {}
+        self.reactive = reactive
+        self.readonly = readonly
     
     def __set_name__(self, owner, name):
         self.name = name
@@ -99,6 +117,8 @@ class observable:
         del self.observers[key]
 
     def __set__(self, instance, value):
+        if self.readonly:
+            raise AttributeError(f"Property {self.name} is readonly")
         store = getattr(instance, self.store.name)
         slot = getattr(store, self.name)
         slot.value = value
@@ -183,6 +203,7 @@ class cached(observable):
         def invalidate(self):
             self.valid = False
             self._value = None
+            #check that all the dependencies are still reactive and raise an exception if not
             self.alert()
 
         @property
@@ -199,8 +220,8 @@ class cached(observable):
             for dep in self.dependencies:
                 dep.check_circular_binding(tgt)
 
-    def __init__(self, *dependencies, store, getter = None):
-        super().__init__(store)
+    def __init__(self, *dependencies, store = None, getter = None, readonly = True, **kwargs):
+        super().__init__(store = store, **kwargs, readonly = readonly)
         self.dependencies = dependencies
         self.getter = getter
 
@@ -291,6 +312,8 @@ if __name__ == "__main__":
 
     t1 = test()
     t2 = test()
+    t1.cached_a_b = 1234
+
     t2._bound.bindable_b = t1._bound.cached_a_b
     t1.bindable_a = 5
     t1.bindable_c = 9
