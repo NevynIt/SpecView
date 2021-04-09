@@ -9,7 +9,6 @@ import types
 
 __all__ = ("property_store", "trigger", "call", "assign")
 
-
 class observable:
     class instance_helper:
         def __init__(self, descriptor):
@@ -311,7 +310,7 @@ def trigger(*args):
     "decorator that binds a call to the method every time the observables in args are modified"
     def decorate(fnc):
         for obs in args:
-            if isinstance(obs, observable):
+            if isinstance(obs, reactive):
                 obs.add_observer(fnc)
             else:
                 raise TypeError
