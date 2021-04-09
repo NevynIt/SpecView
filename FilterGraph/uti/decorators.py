@@ -7,7 +7,7 @@ import types
 #       getattr of a store should also be updated to return a non reactive observable bound to any attribute of the same instance the store is linked to
 #       update the hierarchy to make the observable -> reactive -> bindable|cached
 
-__all__ = ("property_store", "trigger", "call", "assign")
+__all__ = ("property_store", "trigger", "call", "assign", "assignargs")
 
 class observable:
     class instance_helper:
@@ -348,7 +348,15 @@ def assign(**kwargs):
     return decorate
 
 def assignargs(**kwargs):
-    raise NotImplementedError
+    def decorate(fnc):
+        def decorated_function(self, *inner_args, **inner_kwargs):
+            tmp = dict(kwargs)
+            tmp.update(inner_kwargs)
+            for k in kwargs.keys():
+                setattr(self,k,tmp[k])
+            return fnc(self,*inner_args, **tmp)
+        return decorated_function
+    return decorate
 
 if __name__ == "__main__":
     class baseclass:
