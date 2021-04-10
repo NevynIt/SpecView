@@ -1,6 +1,6 @@
 import types, inspect
 
-__all__ = ("property_store", "trigger", "call", "assign", "assignargs")
+__all__ = ("property_store", "trigger", "call", "assign", "assignargs", "constant")
 
 class observable:
     class instance_helper:
@@ -45,7 +45,7 @@ class observable:
 
     def __set__(self, instance, value):
         if self.readonly:
-            raise AttributeError(f"Property {self.name} is readonly")
+            raise AttributeError(f"Property {self.name} of class {type(instance).__name__} is readonly")
         self.get_slot(instance).value = value
 
 class property_store:
@@ -56,7 +56,7 @@ class property_store:
             self.name = name
 
         def init_instance(self, descriptor, instance):
-            raise RuntimeError
+            raise AttributeError("attribute_reference objects should not be included in property_store slots")
 
         @property
         def value(self):
@@ -69,7 +69,7 @@ class property_store:
         def check_circular_binding(self, tgt):
             if tgt is self:
                 #TODO: use a different exception type
-                raise AttributeError("Circular binding")
+                raise RuntimeError(f"Circular binding, found in {self.name} of {self.instance}")
             descriptor = getattr(type(self.instance),self.name, None)
             if isinstance(descriptor, observable):
                 descriptor.get_slot(self.instance).check_circular_binding(tgt)
@@ -100,7 +100,7 @@ class property_store:
             if isinstance(getattr(self, name), bindable.instance_helper):
                 getattr(self, name).binding = value
             else:
-                raise AttributeError(f"{name} is not a bindable property")
+                raise AttributeError(f"{name} is not a bindable property for class {type(self._instance).__name__}")
 
     def __init__(self):
         self.name = None
@@ -112,12 +112,12 @@ class property_store:
         if not self.name in vars(instance):
             store = property_store.instance_helper()
             vars(instance)[self.name] = store
-            slots = self.get_slots(instance,owner)
+            slots = self.get_slots(owner)
             store.create_slots(slots)
             store.init_slots(slots, instance)
         return vars(instance)[self.name]
     
-    def get_slots(self, instance, owner):
+    def get_slots(self, owner):
         mro = inspect.getmro(owner)
         slots = {}
         for cl in reversed(mro):
@@ -127,8 +127,8 @@ class property_store:
         return slots
 
     def __set_name__(self, owner, name):
-        if self.name != None and self.name != name:
-            raise RuntimeError
+        if self.name != None:
+            raise AttributeError("The same property_store is assigned to two separate classes")
         self.name = name
     
     def observable(self, *args, **kwargs):
@@ -214,7 +214,7 @@ class constant(reactive, reactive.instance_helper):
         return self._value
 
     def __set__(self, instance, value):
-        raise AttributeError(f"Property {self.name} is readonly")
+        raise AttributeError(f"Cannot set a constant property")
     
     def add_observer(self, fnc, key=None):
         pass
@@ -223,7 +223,7 @@ class constant(reactive, reactive.instance_helper):
         pass
 
     def init_instance(self, descriptor, instance):
-        raise RuntimeError
+        raise AttributeError("attribute_reference objects should not be included in property_store slots")
 
     @property
     def value(self):
@@ -271,7 +271,7 @@ class bindable(reactive):
         def check_circular_binding(self, tgt):
             if tgt is self:
                 #TODO: use a different exception type
-                raise AttributeError("Circular binding")
+                raise RuntimeError(f"Circular binding, found in {self}")
             if self.bound:
                 self._value.check_circular_binding(tgt)
 
@@ -314,13 +314,13 @@ class cached(reactive):
             super().init_instance(descriptor, instance)
             self.getter = types.MethodType(descriptor.getter, instance)
             for dep in descriptor.dependencies:
-                if not isinstance(dep, observable):
-                    raise TypeError
+                if not isinstance(dep, reactive):
+                    raise TypeError(f"Cached object can only depend on reactive properties: found in {descriptor.name} of class {type(instance).__name__}")
                 store = getattr(instance, dep.store.name)
                 slot = getattr(store, dep.name)
                 slot.check_circular_binding(self)
                 if not slot.reactive:
-                    raise RuntimeError("Cached object dependencies must be reactive")
+                    raise RuntimeError(f"Cached object dependencies must be reactive: found in {descriptor.name} of class {type(instance).__name__}")
                 slot.add_observer(self.invalidate)
                 self.dependencies.append(slot)
 
@@ -342,7 +342,7 @@ class cached(reactive):
         def check_circular_binding(self, tgt):
             if tgt is self:
                 #TODO: use a different exception type
-                raise AttributeError("Circular binding")
+                raise RuntimeError(f"Circular binding, found in {self}")
             for dep in self.dependencies:
                 dep.check_circular_binding(tgt)
 
@@ -362,7 +362,7 @@ def trigger(*args):
             if isinstance(obs, reactive):
                 obs.add_observer(fnc)
             else:
-                raise TypeError
+                raise TypeError("Only reactive properties can be used for triggers")
         return fnc
     return decorate
 
@@ -424,6 +424,7 @@ if __name__ == "__main__":
         # @baseinit()
         @assign(pre_val = 5)
         def __init__(self):
+            self._bound #make sure the bound object is created
             print(f"test init: {self.__dict__=}")
         
         @_bound.cached(bindable_a, bindable_b)
@@ -508,4 +509,14 @@ if __name__ == "__main__":
     rt._bound
     rt.bindable_c = 22
     rt.bindable_a = 15
-    print(rt)
+    
+    class reretest(retest):
+        _bound = property_store()
+        bindable_a = _bound.observable(56)
+
+    try:
+        rrt = reretest()
+        print("Exception missed!")
+    except Exception as e:
+        print(f"Reactive as expected {e=}")
+    
