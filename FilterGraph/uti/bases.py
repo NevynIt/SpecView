@@ -1,18 +1,17 @@
-from autoinit import autoinit
+from decorators import *
 import numpy as np
 import enum, copy
 
-@autoinit(
-    pre={
-        "name": None,
-        "entries": 0,
-        "start": 0,
-        "end": 0,
-        "scale": None
-    }
-)
 class Axis:
-    pass
+    @assignargs(
+        name= None,
+        entries= 0,
+        start= 0,
+        end= 0,
+        scale= None
+        )
+    def __init__(self, entries=22,*, start=24, **kwargs):
+        pass
 
 class Source:
     def read(entries, advance = True):
