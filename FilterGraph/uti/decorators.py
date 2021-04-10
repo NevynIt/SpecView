@@ -1,4 +1,4 @@
-import types
+import types, inspect
 
 __all__ = ("property_store", "trigger", "call", "assign", "assignargs")
 
@@ -79,13 +79,13 @@ class property_store:
             return False
 
     class instance_helper:
-        def create_slots(self, descriptor):
-            for k, v in descriptor.slots.items():
+        def create_slots(self, slots):
+            for k, v in slots.items():
                 vars(self)[k] = type(v).instance_helper(v)
 
-        def init_slots(self, descriptor, instance):
+        def init_slots(self, slots, instance):
             vars(self)["_instance"] = instance
-            for k, v in descriptor.slots.items():
+            for k, v in slots.items():
                 getattr(self, k).init_instance(v, instance)
 
         def __getattr__(self, name):
@@ -112,12 +112,22 @@ class property_store:
         if not self.name in vars(instance):
             store = property_store.instance_helper()
             vars(instance)[self.name] = store
-            store.create_slots(self)
-            store.init_slots(self, instance)
+            slots = self.get_slots(instance,owner)
+            store.create_slots(slots)
+            store.init_slots(slots, instance)
         return vars(instance)[self.name]
     
+    def get_slots(self, instance, owner):
+        mro = inspect.getmro(owner)
+        slots = {}
+        for cl in reversed(mro):
+            store = vars(cl).get(self.name, None)
+            if isinstance(store, property_store):
+                slots.update(store.slots)
+        return slots
+
     def __set_name__(self, owner, name):
-        if self.name != None:
+        if self.name != None and self.name != name:
             raise RuntimeError
         self.name = name
     
@@ -356,7 +366,6 @@ def trigger(*args):
         return fnc
     return decorate
 
-#not sure it's actually useful!
 def call(function_to_call, *, args=(), kwargs={}, append=False):
     "decorator that prepends or appends a member function call to the decorated member function, putting args or kwargs to None passes the ones given in the call. always returns the value of the decorated function"
     def decorate(function):
@@ -370,19 +379,14 @@ def call(function_to_call, *, args=(), kwargs={}, append=False):
         return decorated_function
     return decorate
 
-#TODO:
-# def __base_init(self, *inner_args, **inner_kwargs):
-#     super().__init__(*inner_args, **inner_kwargs)
-
-# def baseinit(*, args=(), kwargs={}, append=False):
-#     return call(__base_init, args=args, kwargs=kwargs, append=append)
-
 def assign(**kwargs):
     def decorate(fnc):
         def decorated_function(self, *inner_args, **inner_kwargs):
             for k,v in kwargs.items():
                 setattr(self,k,v)
             return fnc(self,*inner_args, **inner_kwargs)
+        #maybe here one could assign a __name__ to the decorated function
+        decorated_function.__name__ = f"({fnc.__name__})"
         return decorated_function
     return decorate
 
@@ -479,4 +483,29 @@ if __name__ == "__main__":
         t2._bound.bindable_a.binding = property_store.attribute_reference(t2, "bindable_b")
         print("Exception missed!")
     except Exception as e:
-        print(f"Reactive as expected {e=}") 
+        print(f"Reactive as expected {e=}")
+
+    class retest(test):
+        _bound = property_store()
+
+        @_bound.cached(test.bindable_c)
+        def pippo(self):
+            return self.bindable_c * 3
+        
+        @assignargs(val1 = 1, val2 = 2)
+        def __init__(self, val1, val2):
+            super().__init__()
+
+        @trigger(pippo)
+        def on_pippo(self):
+            print(f"Pippo now {self.pippo=}")
+
+        @trigger(test.bindable_a)
+        def on_binda(self):
+            print(f"binda now {self.bindable_a=}")
+
+    rt = retest()
+    rt._bound
+    rt.bindable_c = 22
+    rt.bindable_a = 15
+    print(rt)
