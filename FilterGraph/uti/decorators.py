@@ -36,7 +36,7 @@ class observable:
 
     def get_slot(self, instance):
         store = getattr(instance, self.store.name)
-        return getattr(store, self.name)       
+        return getattr(store, self.name)
 
     def __get__(self, instance, owner=None):
         if instance == None:
@@ -314,10 +314,7 @@ class cached(reactive):
             super().init_instance(descriptor, instance)
             self.getter = types.MethodType(descriptor.getter, instance)
             for dep in descriptor.dependencies:
-                if not isinstance(dep, reactive):
-                    raise TypeError(f"Cached object can only depend on reactive properties: found in {descriptor.name} of class {type(instance).__name__}")
-                store = getattr(instance, dep.store.name)
-                slot = getattr(store, dep.name)
+                slot = dep.get_slot(instance)
                 slot.check_circular_binding(self)
                 if not slot.reactive:
                     raise RuntimeError(f"Cached object dependencies must be reactive: found in {descriptor.name} of class {type(instance).__name__}")
@@ -401,7 +398,203 @@ def assignargs(**kwargs):
         return decorated_function
     return decorate
 
+class parent_reference:
+    class attribute_reference:
+        def __init__(self, parent, name):
+            self.parent = parent
+            self.name = name
+            self.attrname = None
+        
+        def __set_name__(self, owner, name):
+            if self.attrname != None:
+                raise AttributeError("The same attribute_reference is assigned to two separate classes")
+            self.attrname = name
+        
+        def get_slot(self, instance):
+            parent = getattr(instance, self.parent.name)
+            descriptor = getattr(type(parent), self.name)
+            return descriptor.get_slot(parent)
+
+        def __get__(self, instance, owner=None):
+            if instance == None:
+                return self
+            if not self.name in vars(instance):
+                parent = getattr(instance, self.parent.name)
+                vars(instance)[self.attrname] = getattr(parent, self.name)
+            return vars(instance)[self.attrname]
+
+        # def __getattr__(self, name):
+        #     return parent_reference.attribute_reference(self, name)
+
+    def __init__(self):
+        self.name = None
+    
+    def __set_name__(self, owner, name):
+        if self.name != None:
+            raise AttributeError("The same parent_reference is assigned to two separate classes")
+        self.name = name
+
+    def __get__(self, instance, owner=None):
+        if instance == None:
+            return self
+        raise AttributeError("parent_reference must be used with @autocreate")
+    
+    def __getattr__(self, name):
+        return parent_reference.attribute_reference(self, name)
+
+class autocreate:
+    class observable_reference(observable):
+        def __init__(self, container, wrapped):
+            self.container = container
+            self.wrapped = wrapped
+        
+        def __set_name__(self, owner, name):
+            raise RuntimeError
+
+        def get_slot(self, instance):
+            container = getattr(instance, self.container.name)
+            return self.wrapped.get_slot(container)
+
+        def __get__(self, instance, owner=None):
+            raise RuntimeError
+
+        def __set__(self, instance, value):
+            raise RuntimeError
+
+    def __init__(self, factory):
+        self.name = None
+        if type(factory) is type:
+            class wrapper(factory):
+                def __init__(child, parent):
+                    #assign instance to all parent references
+                    for k,v in vars(factory).items():
+                        if isinstance(v, parent_reference):
+                            vars(child)[k] = parent
+                    super().__init__()
+            wrapper.__qualname__ = factory.__qualname__+"<>"
+            wrapper.__module__ = factory.__module__
+            wrapper.__name__ = factory.__name__+"<>"
+            self.factory = wrapper
+        else:
+            self.factory = factory
+    
+    def __get__(self, instance, owner=None):
+        if instance == None:
+            return self
+        if not self.name in vars(instance):
+            vars(instance)[self.name] = None #canary to identify circular references
+            product = self.factory(instance)
+            vars(instance)[self.name] = product
+        return vars(instance)[self.name]
+    
+    def __set_name__(self, owner, name):
+        if self.name != None:
+            raise AttributeError("The same autocreate is assigned to two separate classes")
+        self.name = name
+    
+    def __getattr__(self, name):
+        attr = getattr(self.factory, name)
+        if isinstance(attr, observable):
+            #wrap the observable
+            return autocreate.observable_reference(self, attr)
+        elif callable(attr):
+            def wrapper(instance, *args, **kwargs):
+                container = getattr(instance, self.name)
+                return attr(container, *args, **kwargs)
+            wrapper.__name__ = attr.__name__+"<>"
+            wrapper.__qualname__ = attr.__qualname__+"<>"
+            wrapper.__module__ = attr.__module__
+            return wrapper
+        return attr
+    
 if __name__ == "__main__":
+    class base:
+        props = property_store()
+
+        a = props.bindable(2)
+        b = props.bindable(3)
+        @props.cached(a,b)
+        def c(self):
+            return self.a + self.b
+
+        @autocreate
+        def times2(self):
+            return self.value * 2
+
+        @property
+        def value(self):
+            return 42
+        
+        @autocreate
+        class child:
+            parent = parent_reference()
+
+            props = property_store()
+            d = props.bindable(10)
+            e = props.bindable(20)
+
+            @props.cached(d,e)
+            def f(self):
+                return self.d + self.e
+
+            def __init__(self):
+                self.copied = self.parent.value
+            
+            def fnc(self, n):
+                return n*self.f
+
+            @property
+            def value(self):
+                return self.copied
+
+            @props.cached(d,parent.b)
+            def h(self):
+                return self.d + self.parent.b
+
+            @autocreate
+            class grandson:
+                parent = parent_reference()
+
+                props = property_store()
+                i = props.bindable(100)
+                j = props.bindable(200)
+
+                # grand = parent.parent #TODO
+                # @props.cached(i,grand.a) #TODO
+                # def k(self):
+                #     return self.i + self.grand.a #TODO
+
+        @props.cached(c, child.f)
+        def g(self):
+            return self.c + self.child.f
+
+        chfnc = child.fnc
+            
+        # @props.cached(b,child.grandson.j) #TODO
+        # def l(self):
+        #     return self.b + self.child.grandson.j
+
+        # gs = child.grandson #TODO
+
+        # @props.cached(b,gs.i)
+        # def m(self):
+        #     return self.b + self.gs.i
+    
+    b = base()
+    print(b.child.value)
+    print(b.times2)
+    print(b.child.f)
+    print(b.c)
+    print(b.g)
+    print(b.chfnc(4))
+    print(b.child.h)
+    # print(b.child.l)
+    # print(b.child.m)
+    pass
+
+
+
+if False and __name__ == "__main__":
     class baseclass:
         def __init__(self):
             print(f"Base init: {self.__dict__=}")
