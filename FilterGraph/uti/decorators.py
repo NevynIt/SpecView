@@ -574,7 +574,7 @@ if __name__ == "__main__":
         # def l(self):
         #     return self.b + self.child.grandson.j
 
-        # gs = child.grandson #TODO
+        gs = child.grandson #TODO
 
         # @props.cached(b,gs.i)
         # def m(self):
