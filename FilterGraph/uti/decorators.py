@@ -1,14 +1,17 @@
 import types, inspect
 
-__all__ = ("property_store", "trigger", "call", "assign", "assignargs", "constant")
+__all__ = ("property_store", "trigger", "call", "assign", "assignargs", "constant", "parent_reference", "autocreate")
 
 class observable:
     class instance_helper:
         def __init__(self, descriptor):
             self._value = descriptor.default_value
+            self.init_done = False #keep for debug for now
         
         def init_instance(self, descriptor, instance):
-            pass
+            if self.init_done: #keep for debug for now
+                raise RuntimeError("Instance initialised twice")
+            self.init_done = True #keep for debug for now
 
         @property
         def value(self):
@@ -40,13 +43,37 @@ class observable:
 
     def __get__(self, instance, owner=None):
         if instance == None:
-            return self
+            return observable_reference(self)
         return self.get_slot(instance).value
 
     def __set__(self, instance, value):
         if self.readonly:
             raise AttributeError(f"Property {self.name} of class {type(instance).__name__} is readonly")
         self.get_slot(instance).value = value
+
+class observable_reference(observable):
+    def __init__(self, ref):
+        vars(self)["_ref"] = ref
+    
+    def __set_name__(self, owner, name):
+        pass
+
+    def __get__(self, instance, owner=None):
+        if instance == None:
+            return self
+        return self._ref(instance, owner)
+    
+    def get_slot(self, instance):
+        return self._ref.get_slot(instance)
+
+    def __set__(self, instance, value):
+        self._ref.__set__(instance, value)
+    
+    # def __getattr__(self, name):
+    #     return getattr(self._ref, name)
+    
+    # def __setattr__(self,name,value):
+    #     setattr(self._ref,name,value)
 
 class property_store:
     class attribute_reference(observable.instance_helper):
@@ -56,7 +83,7 @@ class property_store:
             self.name = name
 
         def init_instance(self, descriptor, instance):
-            raise AttributeError("attribute_reference objects should not be included in property_store slots")
+            raise AttributeError("attribute_reference objects should not be included in property_store slots") #TODO: use a different exception type
 
         @property
         def value(self):
@@ -128,7 +155,7 @@ class property_store:
 
     def __set_name__(self, owner, name):
         if self.name != None:
-            raise AttributeError("The same property_store is assigned to two separate classes")
+            raise AttributeError("The same property_store is assigned twice to a class")
         self.name = name
     
     def observable(self, *args, **kwargs):
@@ -151,6 +178,7 @@ class reactive(observable):
             self.observers = {}
         
         def init_instance(self, descriptor, instance):
+            super().init_instance(descriptor, instance)
             for v in descriptor.observers.values():
                 self.add_observer(types.MethodType(v, instance))
 
@@ -170,6 +198,7 @@ class reactive(observable):
             if key == None:
                 key = id(fnc)
             self.observers[key] = fnc
+            return key
 
         def del_observer(self, key):
             del self.observers[key]
@@ -186,14 +215,50 @@ class reactive(observable):
         super().__init__(default_value=default_value,store=store, readonly=readonly)
         self.observers = {}
 
+    def __get__(self, instance, owner=None):
+        if instance == None:
+            return reactive_reference(self)
+        return self.get_slot(instance).value
+
     def add_observer(self, fnc, key=None):
         if key == None:
             key = id(fnc)
         self.observers[key] = fnc
+        return key
 
     def del_observer(self, key):
         del self.observers[key]
 
+class reactive_reference(reactive):
+    def __init__(self, ref):
+        vars(self)["_ref"] = ref
+    
+    def __set_name__(self, owner, name):
+        pass
+    
+    def get_slot(self, instance):
+        return self._ref.get_slot(instance)
+
+    def __get__(self, instance, owner=None):
+        if instance == None:
+            return self
+        return self._ref(instance, owner)
+    
+    def __set__(self, instance, value):
+        self._ref.__set__(instance, value)
+    
+    # def __getattr__(self, name):
+    #     return getattr(self._ref, name)
+    
+    # def __setattr__(self,name,value):
+    #     setattr(self._ref,name,value)
+
+    def add_observer(self, fnc, key=None):
+        return self._ref.add_observer(fnc,key)
+
+    def del_observer(self, key):
+        self._ref.del_observer(key)
+    
 class constant(reactive, reactive.instance_helper):
     def __init__(self, value):
         self._value = value
@@ -223,7 +288,7 @@ class constant(reactive, reactive.instance_helper):
         pass
 
     def init_instance(self, descriptor, instance):
-        raise AttributeError("attribute_reference objects should not be included in property_store slots")
+        raise AttributeError("constant objects should not be included in property_store slots")
 
     @property
     def value(self):
@@ -398,71 +463,57 @@ def assignargs(**kwargs):
         return decorated_function
     return decorate
 
-class parent_reference:
-    class attribute_reference:
-        def __init__(self, parent, name):
-            self.parent = parent
-            self.name = name
-            self.attrname = None
-        
-        def __set_name__(self, owner, name):
-            if self.attrname != None:
-                raise AttributeError("The same attribute_reference is assigned to two separate classes")
-            self.attrname = name
-        
-        def get_slot(self, instance):
-            parent = getattr(instance, self.parent.name)
-            descriptor = getattr(type(parent), self.name)
-            return descriptor.get_slot(parent)
-
-        def __get__(self, instance, owner=None):
-            if instance == None:
-                return self
-            if not self.name in vars(instance):
-                parent = getattr(instance, self.parent.name)
-                vars(instance)[self.attrname] = getattr(parent, self.name)
-            return vars(instance)[self.attrname]
-
-        # def __getattr__(self, name):
-        #     return parent_reference.attribute_reference(self, name)
-
-    def __init__(self):
-        self.name = None
+class attribute_reference:
+    def __init__(self, parent, name):
+        self.parent = parent
+        self.name_in_parent = name
     
     def __set_name__(self, owner, name):
-        if self.name != None:
-            raise AttributeError("The same parent_reference is assigned to two separate classes")
-        self.name = name
+        pass
+
+    @property
+    def ownerclass(self):
+        return self.parent.ownerclass
+
+    def get_slot(self, instance):
+        parent = self.parent.__get__(instance, self.parent.ownerclass)
+        descriptor = getattr(type(parent), self.name_in_parent)
+        return descriptor.get_slot(parent)     
 
     def __get__(self, instance, owner=None):
         if instance == None:
             return self
-        raise AttributeError("parent_reference must be used with @autocreate")
+        return getattr(self.parent.__get__(instance, self.ownerclass), self.name_in_parent)
+
+    def __set__(self, instance, value):
+        setattr(self.parent.__get__(instance, self.ownerclass), self.name_in_parent, value) #TODO: Test me!
+
+    def __getattr__(self, name):
+        return attribute_reference(self, name)
+
+class parent_reference:
+    def __init__(self):
+        self.name = None
+        self.ownerclass = None
+    
+    def __set_name__(self, owner, name):
+        if self.name != None and not owner is self.ownerclass:
+            raise AttributeError("The same parent_reference is assigned to two different classes")
+        self.name = name
+        self.ownerclass = owner
+
+    def __get__(self, instance, owner=None):
+        if instance == None:
+            return self
+        return vars(instance)[self.name] #go direct to __dict__
     
     def __getattr__(self, name):
-        return parent_reference.attribute_reference(self, name)
+        return attribute_reference(self, name)
 
 class autocreate:
-    class observable_reference(observable):
-        def __init__(self, container, wrapped):
-            self.container = container
-            self.wrapped = wrapped
-        
-        def __set_name__(self, owner, name):
-            raise RuntimeError
-
-        def get_slot(self, instance):
-            container = getattr(instance, self.container.name)
-            return self.wrapped.get_slot(container)
-
-        def __get__(self, instance, owner=None):
-            raise RuntimeError
-
-        def __set__(self, instance, value):
-            raise RuntimeError
-
     def __init__(self, factory):
         self.name = None
+        self.ownerclass = None
         if type(factory) is type:
             class wrapper(factory):
                 def __init__(child, parent):
@@ -489,23 +540,12 @@ class autocreate:
     
     def __set_name__(self, owner, name):
         if self.name != None:
-            raise AttributeError("The same autocreate is assigned to two separate classes")
+            raise AttributeError("The same autocreate is assigned twice to a class")
         self.name = name
+        self.ownerclass = owner
     
     def __getattr__(self, name):
-        attr = getattr(self.factory, name)
-        if isinstance(attr, observable):
-            #wrap the observable
-            return autocreate.observable_reference(self, attr)
-        elif callable(attr):
-            def wrapper(instance, *args, **kwargs):
-                container = getattr(instance, self.name)
-                return attr(container, *args, **kwargs)
-            wrapper.__name__ = attr.__name__+"<>"
-            wrapper.__qualname__ = attr.__qualname__+"<>"
-            wrapper.__module__ = attr.__module__
-            return wrapper
-        return attr
+        return attribute_reference(self, name)
     
 if __name__ == "__main__":
     class base:
@@ -559,10 +599,10 @@ if __name__ == "__main__":
                 i = props.bindable(100)
                 j = props.bindable(200)
 
-                # grand = parent.parent #TODO
-                # @props.cached(i,grand.a) #TODO
-                # def k(self):
-                #     return self.i + self.grand.a #TODO
+                grand = parent.parent
+                @props.cached(i,grand.a)
+                def k(self):
+                    return self.i + self.grand.a
 
         @props.cached(c, child.f)
         def g(self):
@@ -570,15 +610,15 @@ if __name__ == "__main__":
 
         chfnc = child.fnc
             
-        # @props.cached(b,child.grandson.j) #TODO
-        # def l(self):
-        #     return self.b + self.child.grandson.j
+        @props.cached(b,child.grandson.j)
+        def l(self):
+            return self.b + self.child.grandson.j
 
-        gs = child.grandson #TODO
+        gs = child.grandson
 
-        # @props.cached(b,gs.i)
-        # def m(self):
-        #     return self.b + self.gs.i
+        @props.cached(b,gs.i)
+        def m(self):
+            return self.b + self.gs.i
     
     b = base()
     print(b.child.value)
@@ -588,13 +628,12 @@ if __name__ == "__main__":
     print(b.g)
     print(b.chfnc(4))
     print(b.child.h)
-    # print(b.child.l)
-    # print(b.child.m)
+    print(b.l)
+    print(b.m)
     pass
 
 
-
-if False and __name__ == "__main__":
+if True and __name__ == "__main__":
     class baseclass:
         def __init__(self):
             print(f"Base init: {self.__dict__=}")
