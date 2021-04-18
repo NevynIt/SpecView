@@ -60,7 +60,7 @@ MEMBER PROPERTY DESCRIPTORS
                         this is made to be used as a decorator and calls add_observer
                         NOTE:
                             DO NOT use property descriptors from other classes (not even base classes) in this way, as it would break these classes
-                            use inherited() to create a reference to the base class property and add to it
+                            use inherited() to create a reference to the base class property and add triggers to it
             
             inherited()
                 creates a copy of the same property from the base class, so that new observers can be added without breaking the base class
