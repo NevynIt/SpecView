@@ -1,6 +1,151 @@
+"""
+CLASS DEFINITION HELPERS
+
+CLASS DECORATORS
+    @baseinit(class_to_decorate=None, *, args=(), kwargs={}, mixargs=False)
+        updates the __init__ to automatically call super().__init__ at the beginning
+        can also be used directly without parameters, and in that case will call the base_class without parameters
+        if args or kwargs = None, pass the (kw)arguments passed to __init__ to the base __init__
+        if mixargs = True, then limitedly to the arguments included in args and kwargs (if not None), the ones received in the call replace the default given to the decorator
+
+MEMBER FUNCTION DECORATORS
+    @call(function_to_call, *, args=(), kwargs={}, append=False, mixargs=False)
+        returns a decorator that calls function_to_call before (or after if append==True) the decorated function is executed
+        args and kwargs are used in the call to function_to_call unless they are set to None
+        in that case, the args or kwargs passed to the decorated function are also passed to function_to_call
+        mixargs works the same as in baseinit
+
+    @assign(**kwargs)
+        decorates the function so that the kwargs are assigned to self before execution
+    
+    @assignargs(**kwargs)
+        similar to assign, but also passes the kwargs as parameters, and updates the default value with any kwarg that is passed at runtime
+
+PROPERTY DESCRIPTORS
+    property_store:
+        add an instance of property_store as a class member and use it to create (and store at runtime) other properties
+        use these methods of the descriptor to get descriptors for various types of properties:
+            observable(default_value = None, *, readonly = false)
+                base class for all the others, automatically creates the instance member and assigns the default_value as soon as it is accessed
+                if readonly, will raise an exception if one tries to set value
+                includes the following
+                    value
+                        get/set property
+                    check_circular_binding(target)
+                        called to see if the properties referenced by this one include target
+                        if so, a circular binding is identified and the function raises an exception
+                    reactive
+                        readonly property to identify reactive properties at runtime
+
+            reactive(default_value = None, *, readonly = false)
+                base class for the next ones
+                instances includes the following methods
+                    add_observer(fnc, key=None)
+                        promises to call fnc(source) as soon as the value of the property has changed
+                    del_observer(key)
+                        removed the callback fnc from the list
+                    alert(source = None)
+                        receives a notification from source, the default behaviour is to pass the alert to the observers as is
+                    raise_alert(source = None)
+                        internal implementation to call each of the callbacks
+                        if source = none, will pass self to each callback
+                the descriptor itself includes
+                    add_observer(fnc, key=None)
+                        promises to call fnc(source) bound to the actual instance as soon as the value of the property has changed
+                        fnc should take a single argument, which will be the source object that initiated the alert chain
+                        (maybe I could make it a tuple with all the objects that were alerted one after another. one could take this from the call stack)
+                    del_observer(key)
+                        removed the callback fnc from the list
+                    trigger(fnc)
+                        this is made to be used as a decorator and calls add_observer
+                        NOTE:
+                            DO NOT use property descriptors from other classes (not even base classes) in this way, as it would break these classes
+                            use inherited() to create a reference to the base class property and add to it
+            
+            inherit()
+                creates a copy of the same property from the base class, so that new observers can be added without breaking the base class
+                use this for triggers or cached object that depend on properties of the base class
+            
+            bindable(default_value = None, *, readonly = false)
+                special property that can be set to a reference to something else
+                if it is not bound or if the something else is reactive, then the property is also reactive
+                circular references are immediately checked on binding, and raise an exception
+            
+            cached(*dependencies, getter=None)
+                creates a property whose value is calculated using getter on access (lazy)
+                the result of the function is cached, and a trigger is added that invalidates the cache as soon as any of the reactive objects in the dependencies raises an alert
+                this can be used as a decorator as well
+                    import ThisModule as cdh
+                    class MyClass:
+                        props = cdh.property_store()
+                        p1 = props.reactive(1)
+                        @props.cached(p1)
+                        def p2(self):
+                            return p1*2
+            
+            constant(value)
+                creates a property that always returns the same value
+                this property derives from reactive even if will never alert, as the value never changes
+                constant is a classmethod, so it can be created even without creating an actual property_store
+        
+        Once the class is instanciated, the property store instance is automatically created as soon as any property is accessed
+        it can be used to get instances of the storage object associated to the properties (in order to add_observers, invalidate, bind, etc...)
+        or to get an autogenerated observable that can be used to bind a boundable property (of any other object) to any member of this instance
+
+    @autocreate
+        allows creation of complex composed objects, in which some members are at the same time totally bound to the container but also instances of different classes
+        decorates a class declared inside another class
+        returns a descriptor that creates an instance of the class on access, and assigns it to the instance, in a member with the same name as the class
+        the class gives access to autocreate.parent_reference(), which gives access to the containing class
+        NOTE: although cached properties work well across the structure, triggers don't at the moment
+
+        Example usage:
+            class outer(some_base_class):
+                props = property_store()
+                op1 = props.reactive(1)
+
+                @autocreate
+                class inner(another_base_class):
+                    parent = autocreate.parent_reference()
+                    props = property_store()
+                    ip1 = props.reactive(2)
+                    
+                    @parent.op1.trigger #NOTE: currently raises an exception
+                    def on_op1(self, source):
+                        print(self.parent.op1)
+                    
+                    @autocreate
+                    class inner_inner(yet_another_one):
+                        parent = autocreate.parent_reference()
+                        props = property_store()                        
+                        iip1 = props.reactive(3)
+                    
+                        @parent.parent.op1.trigger #NOTE: currently raises an exception
+                        def on_op1(self, source):
+                            print(self.parent.parent.op1)
+                        
+                        @props.cached(iip1, parent.ip1, parent.parent.op1)
+                        def iip2(self):
+                            return (self.iip1, self.parent.ip1, self.parent.parent.op1)
+                
+                @inner.ip1.trigger #NOTE: currently raises an exception
+                def on_ip1(self, source):
+                    pass
+                    
+                @props.cached(op1,inner.ip1,inner.inner_inner.iip1)
+                def op2(self):
+                    return (self.op1,self.inner.ip1,self.inner.inner_inner.iip1)
+
+            o = outer()
+            o.op1 = 4
+            o.inner.ip1 = 5
+            o.inner.inner_inner.iip1 = 6
+
+"""
+
 import types, inspect
 
-__all__ = ("property_store", "trigger", "call", "assign", "assignargs", "constant", "autocreate")
+__all__ = ("baseinit", "call", "assign", "assignargs", "property_store", "autocreate")
 
 class observable:
     class instance_helper:
@@ -69,8 +214,8 @@ class observable_reference(observable):
     def __set__(self, instance, value):
         self._ref.__set__(instance, value)
     
-    # def __getattr__(self, name):
-    #     return getattr(self._ref, name)
+    def __getattr__(self, name):
+        return getattr(self._ref, name)
     
     # def __setattr__(self,name,value):
     #     setattr(self._ref,name,value)
@@ -171,6 +316,13 @@ class property_store:
         "returns a decorator that creates a cached property that is invalidated when any of the observables passed as arguments is modified"
         return cached(*args, **kwargs, store=self)
 
+    @classmethod
+    def constant(self, *args, **kwargs):
+        return constant(*args, **kwargs)
+    
+    def inherited(self):
+        return inherited_reference(store=self)
+
 class reactive(observable):
     class instance_helper(observable.instance_helper):
         def __init__(self, descriptor):
@@ -233,6 +385,10 @@ class reactive(observable):
 
     def del_observer(self, key):
         del self.observers[key]
+    
+    def trigger(self, fnc):
+        self.add_observer(fnc)
+        return fnc
 
 class reactive_reference(reactive):
     def __init__(self, ref):
@@ -252,8 +408,8 @@ class reactive_reference(reactive):
     def __set__(self, instance, value):
         self._ref.__set__(instance, value)
     
-    # def __getattr__(self, name):
-    #     return getattr(self._ref, name)
+    def __getattr__(self, name):
+        return getattr(self._ref, name)
     
     # def __setattr__(self,name,value):
     #     setattr(self._ref,name,value)
@@ -263,7 +419,18 @@ class reactive_reference(reactive):
 
     def del_observer(self, key):
         self._ref.del_observer(key)
-    
+
+class inherited_reference(reactive):
+    def __set_name__(self, owner, name):
+        self.name = name
+        self.store.slots[name] = self
+        parent = getattr(super(owner,owner), self.name)
+        self.default_value = parent.default_value
+        self.readonly = parent.readonly
+        tmp = dict(parent.observers)
+        tmp.update(self.observers)
+        self.observers = tmp
+
 class constant(reactive, reactive.instance_helper):
     def __init__(self, value):
         self._value = value
@@ -362,7 +529,7 @@ class bindable(reactive):
                     self._value.add_observer(self.alert, id(self))
             else:
                 if self.bound == True and self._value.reactive:
-                    self._value.del_trigger(id(self))
+                    self._value.del_observer(id(self))
                 self.bound = False
                 self._value = value
             self.raise_alert()
@@ -424,36 +591,81 @@ class cached(reactive):
         self.getter = getter
         return self
 
-def trigger(*args):
-    "decorator that binds a call to the method every time the observables in args are modified"
-    def decorate(fnc):
-        for obs in args:
-            if isinstance(obs, reactive):
-                obs.add_observer(fnc)
-            else:
-                raise TypeError("Only reactive properties can be used for triggers")
-        return fnc
-    return decorate
-
-def call(function_to_call, *, args=(), kwargs={}, append=False):
+def call(function_to_call, *, args=(), kwargs={}, append=False, mixargs=False):
     "decorator that prepends or appends a member function call to the decorated member function, putting args or kwargs to None passes the ones given in the call. always returns the value of the decorated function"
     def decorate(function):
         def decorated_function(self, *inner_args, **inner_kwargs):
+            nonlocal args, kwargs, append, mixargs
+            if args == None:
+                targs = inner_args
+            else:
+                targs = list(args)
+                if mixargs: #this could be done in a thousand ways
+                    for i in range(min(len(args),len(inner_args))):
+                        targs[i] = inner_args[i]
+                
+            if kwargs == None:
+                kwargs = inner_kwargs
+            else:
+                tkwargs = dict(kwargs)
+                if mixargs: #this could be done in a thousand ways
+                    for k in kwargs.keys():
+                        if k in inner_kwargs:
+                            tkwargs[k] = inner_kwargs[k]
+
             if not append:
-                function_to_call(self, *(inner_args if args == None else args), **(inner_kwargs if kwargs == None else kwargs))
+                function_to_call(self, *targs, **tkwargs)
             retval = function(self, *inner_args, **inner_kwargs)
             if append:
-                function_to_call(self, *(inner_args if args == None else args), **(inner_kwargs if kwargs == None else kwargs))
+                function_to_call(self, *targs, **tkwargs)
             return retval
         return decorated_function
     return decorate
+
+def baseinit(class_to_decorate=None, *, args=(), kwargs={}, mixargs=False):
+    if class_to_decorate == None:
+        #return a decorator
+        def decorate(inner_class_to_decorate):
+            return baseinit(inner_class_to_decorate, args=args, kwargs=kwargs)
+        return decorate
+    else:
+        #decorate directly
+        if isinstance(class_to_decorate, type):
+            old_init = class_to_decorate.__init__
+            base_init = super(class_to_decorate,class_to_decorate).__init__
+            if old_init != base_init:
+                def new_init(self, *inner_args, **inner_kwargs):
+                    nonlocal args, kwargs, mixargs, old_init, base_init
+                    if args == None:
+                        targs = inner_args
+                    else:
+                        targs = list(args)
+                        if mixargs: #this could be done in a thousand ways
+                            for i in range(min(len(args),len(inner_args))):
+                                targs[i] = inner_args[i]
+                        
+                    if kwargs == None:
+                        kwargs = inner_kwargs
+                    else:
+                        tkwargs = dict(kwargs)
+                        if mixargs: #this could be done in a thousand ways
+                            for k in kwargs.keys():
+                                if k in inner_kwargs:
+                                    tkwargs[k] = inner_kwargs[k]
+
+                    base_init(self, *targs, **tkwargs)
+                    old_init(self, *inner_args, **inner_kwargs)
+                class_to_decorate.__init__ = new_init
+        else:
+            raise TypeError
+        return class_to_decorate
 
 def assign(**kwargs):
     def decorate(fnc):
         def decorated_function(self, *inner_args, **inner_kwargs):
             for k,v in kwargs.items():
                 setattr(self,k,v)
-            return fnc(self,*inner_args, **inner_kwargs)
+            return fnc(self, *inner_args, **inner_kwargs)
         #maybe here one could assign a __name__ to the decorated function
         decorated_function.__name__ = f"({fnc.__name__})"
         return decorated_function
@@ -466,37 +678,48 @@ def assignargs(**kwargs):
             tmp.update(inner_kwargs)
             for k in kwargs.keys():
                 setattr(self,k,tmp[k])
-            return fnc(self,*inner_args, **tmp)
+            return fnc(self, *inner_args, **tmp)
         return decorated_function
     return decorate
 
 class attribute_reference:
     def __init__(self, parent, name):
-        self.parent = parent
-        self.name_in_parent = name
+        self.__parent = parent
+        self.__name_in_parent = name
     
     def __set_name__(self, owner, name):
         pass
 
     @property
     def ownerclass(self):
-        return self.parent.ownerclass
+        return self.__parent.ownerclass
 
     def get_slot(self, instance):
-        parent = self.parent.__get__(instance, self.parent.ownerclass)
-        descriptor = getattr(type(parent), self.name_in_parent)
+        parent = self.__parent.__get__(instance, self.__parent.ownerclass)
+        descriptor = getattr(type(parent), self.__name_in_parent)
         return descriptor.get_slot(parent)     
 
     def __get__(self, instance, owner=None):
         if instance == None:
             return self
-        return getattr(self.parent.__get__(instance, self.ownerclass), self.name_in_parent)
+        return getattr(self.__parent.__get__(instance, self.ownerclass), self.__name_in_parent)
 
     def __set__(self, instance, value):
-        setattr(self.parent.__get__(instance, self.ownerclass), self.name_in_parent, value) #TODO: Test me!
+        setattr(self.__parent.__get__(instance, self.ownerclass), self.__name_in_parent, value) #TODO: Test me!
 
     def __getattr__(self, name):
         return attribute_reference(self, name)
+    
+    def __call__(self, *args, **kwargs):
+        if self.__name_in_parent == "trigger" and len(args) == 1 and callable(args[0]) and kwargs == {}:
+            #used as a decorator for a trigger
+            self.__trigger(args[0])
+            return args[0]
+        else:
+            raise TypeError("'attribute_reference' object is not callable - unless it's a trigger decorator ;-)")
+
+    def __trigger(self, fnc):
+        raise NotImplementedError #TODO
 
 class parent_reference:
     def __init__(self):
@@ -552,11 +775,12 @@ class autocreate:
             raise AttributeError("The same autocreate is assigned twice to a class")
         self.name = name
         self.ownerclass = owner
+        #create the triggers that have been queued
     
     def __getattr__(self, name):
         return attribute_reference(self, name)
     
-if __name__ == "__main__":
+if True and __name__ == "__main__":
     class base:
         props = property_store()
 
@@ -600,6 +824,10 @@ if __name__ == "__main__":
             def h(self):
                 return self.d + self.parent.b
 
+            # @parent.b.trigger
+            # def on_parent_b(self, source):
+            #     print("On parent B")
+
             @autocreate
             class grandson:
                 parent = autocreate.parent_reference()
@@ -641,28 +869,26 @@ if __name__ == "__main__":
     print(b.m)
     pass
 
-
 if True and __name__ == "__main__":
     class baseclass:
         def __init__(self):
             print(f"Base init: {self.__dict__=}")
 
+    @baseinit
     class test(baseclass):
         _bound = property_store()
         bindable_a = _bound.bindable(2)
         bindable_b = _bound.bindable(3)
         bindable_c = _bound.bindable(4)
 
-        constant_d = constant(55)
+        constant_d = property_store.constant(55)
+        constant_d2 = _bound.constant(66)
 
         def baseinitial(self):
-            print(f"before baseclass init: {self.__dict__=}")
-            baseclass.__init__(self)
-            print(f"after baseclass init: {self.__dict__=}")
+            print(f"BASEINITIAL {self.__dict__=}")
 
         @assign(prebase_val = 1)
         @call(baseinitial)
-        # @baseinit()
         @assign(pre_val = 5)
         def __init__(self):
             self._bound #make sure the bound object is created
@@ -672,11 +898,11 @@ if True and __name__ == "__main__":
         def cached_a_b(self):
             return self.bindable_a + self.bindable_b
 
-        @trigger(bindable_c)
+        @bindable_c.trigger
         def on_bindable_c(self, source):
             print(f"bindable_c has changed: {source=} {self.bindable_c=}")
         
-        @trigger(cached_a_b)
+        @cached_a_b.trigger
         def on_cached_a_b(self, source):
             print(f"cached_a_b has changed: {source=} {self.cached_a_b=}")
             pass
@@ -738,11 +964,13 @@ if True and __name__ == "__main__":
         def __init__(self, val1, val2):
             super().__init__()
 
-        @trigger(pippo)
+        @pippo.trigger
         def on_pippo(self, source):
             print(f"Pippo now {self.pippo=} {source=}")
 
-        @trigger(test.bindable_a)
+        bindable_a = _bound.inherited()
+
+        @bindable_a.trigger
         def on_binda(self, source):
             print(f"binda now {self.bindable_a=} {source=}")
 
@@ -750,6 +978,9 @@ if True and __name__ == "__main__":
     rt._bound
     rt.bindable_c = 22
     rt.bindable_a = 15
+
+    tt3 = test()
+    tt3.bindable_a = 234
     
     class reretest(retest):
         _bound = property_store()
@@ -760,4 +991,57 @@ if True and __name__ == "__main__":
         print("Exception missed!")
     except Exception as e:
         print(f"Reactive as expected {e=}")
-    
+
+if __name__ == "__main__":
+    class outer:
+        props = property_store()
+        op1 = props.reactive(1)
+
+        @autocreate
+        class inner:
+            parent = autocreate.parent_reference()
+            props = property_store()
+            ip1 = props.reactive(2)
+            
+            # @parent.op1.trigger
+            # def on_op1(self, source):
+            #     print(self.parent.op1)
+            
+            @autocreate
+            class inner_inner:
+                parent = autocreate.parent_reference()
+                props = property_store()                        
+                iip1 = props.reactive(3)
+            
+                # @parent.parent.op1.trigger
+                # def on_op1(self, source):
+                #     print(self.parent.parent.op1)
+                
+                @props.cached(iip1, parent.ip1, parent.parent.op1)
+                def iip2(self):
+                    print("iip2")
+                    return (self.iip1, self.parent.ip1, self.parent.parent.op1)
+        
+        # @inner.ip1.trigger
+        # def on_ip1(self, source):
+        #     pass
+            
+        @props.cached(op1,inner.ip1,inner.inner_inner.iip1)
+        def op2(self):
+            print("op2")
+            return (self.op1,self.inner.ip1,self.inner.inner_inner.iip1)
+
+    o = outer()
+    o.op2
+    o.inner.inner_inner.iip2
+    o.op1 = 4
+    o.op2
+    o.inner.inner_inner.iip2
+    o.inner.ip1 = 5
+    o.op2
+    o.inner.inner_inner.iip2
+    o.inner.inner_inner.iip1 = 6
+    o.op2
+    o.inner.inner_inner.iip2
+    o.op2
+    o.inner.inner_inner.iip2
