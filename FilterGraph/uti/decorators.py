@@ -1,6 +1,6 @@
 import types, inspect
 
-__all__ = ("property_store", "trigger", "call", "assign", "assignargs", "constant", "parent_reference", "autocreate")
+__all__ = ("property_store", "trigger", "call", "assign", "assignargs", "constant", "autocreate")
 
 class observable:
     class instance_helper:
@@ -189,12 +189,12 @@ class reactive(observable):
         @value.setter
         def value(self, v):
             self._value = v
-            self.alert()
+            self.raise_alert()
 
         def check_circular_binding(self, tgt):
             pass
 
-        def add_observer(self, fnc, key=None):
+        def add_observer(self, fnc, key=None): #TODO: use weak references to the underlying object --- maybe...
             if key == None:
                 key = id(fnc)
             self.observers[key] = fnc
@@ -203,9 +203,14 @@ class reactive(observable):
         def del_observer(self, key):
             del self.observers[key]
 
-        def alert(self):
+        def raise_alert(self, source = None):
+            if source == None:
+                source = self
             for fnc in self.observers.values():
-                fnc()
+                fnc(source)
+        
+        def alert(self, source = None):
+            self.raise_alert(source)
 
         @property
         def reactive(self):
@@ -301,7 +306,7 @@ class constant(reactive, reactive.instance_helper):
     def reactive(self):
         return True
     
-    def alert(self):
+    def raise_alert(self, source=None):
         raise RuntimeError("Constant property cannot really alert for modification!")
 
 class bindable(reactive):
@@ -324,7 +329,7 @@ class bindable(reactive):
                 self._value.value = v
             else:
                 self._value = v
-            self.alert()
+            self.raise_alert()
 
         @property
         def binding(self):
@@ -360,7 +365,7 @@ class bindable(reactive):
                     self._value.del_trigger(id(self))
                 self.bound = False
                 self._value = value
-            self.alert()
+            self.raise_alert()
 
         @property
         def reactive(self):
@@ -386,13 +391,15 @@ class cached(reactive):
                 slot.add_observer(self.invalidate)
                 self.dependencies.append(slot)
 
-        def invalidate(self):
+        def invalidate(self, source=None):
+            if source == None:
+                source = self
             self.valid = False
             self._value = None
             for dep in self.dependencies:
                 if not dep.reactive:
                     raise RuntimeError("Cached object dependencies must stay reactive all the time")
-            self.alert()
+            self.raise_alert(source)
 
         @property
         def value(self):
@@ -511,6 +518,8 @@ class parent_reference:
         return attribute_reference(self, name)
 
 class autocreate:
+    parent_reference = parent_reference
+
     def __init__(self, factory):
         self.name = None
         self.ownerclass = None
@@ -567,7 +576,7 @@ if __name__ == "__main__":
         
         @autocreate
         class child:
-            parent = parent_reference()
+            parent = autocreate.parent_reference()
 
             props = property_store()
             d = props.bindable(10)
@@ -593,7 +602,7 @@ if __name__ == "__main__":
 
             @autocreate
             class grandson:
-                parent = parent_reference()
+                parent = autocreate.parent_reference()
 
                 props = property_store()
                 i = props.bindable(100)
@@ -664,12 +673,12 @@ if True and __name__ == "__main__":
             return self.bindable_a + self.bindable_b
 
         @trigger(bindable_c)
-        def on_bindable_c(self):
-            print(f"bindable_c has changed: {self.bindable_c=}")
+        def on_bindable_c(self, source):
+            print(f"bindable_c has changed: {source=} {self.bindable_c=}")
         
         @trigger(cached_a_b)
-        def on_cached_a_b(self):
-            print(f"cached_a_b has changed: {self.cached_a_b=}")
+        def on_cached_a_b(self, source):
+            print(f"cached_a_b has changed: {source=} {self.cached_a_b=}")
             pass
 
     t1 = test()
@@ -730,12 +739,12 @@ if True and __name__ == "__main__":
             super().__init__()
 
         @trigger(pippo)
-        def on_pippo(self):
-            print(f"Pippo now {self.pippo=}")
+        def on_pippo(self, source):
+            print(f"Pippo now {self.pippo=} {source=}")
 
         @trigger(test.bindable_a)
-        def on_binda(self):
-            print(f"binda now {self.bindable_a=}")
+        def on_binda(self, source):
+            print(f"binda now {self.bindable_a=} {source=}")
 
     rt = retest()
     rt._bound
