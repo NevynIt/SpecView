@@ -21,7 +21,7 @@ MEMBER FUNCTION DECORATORS
     @assignargs(**kwargs)
         similar to assign, but also passes the kwargs as parameters, and updates the default value with any kwarg that is passed at runtime
 
-PROPERTY DESCRIPTORS
+MEMBER PROPERTY DESCRIPTORS
     property_store:
         add an instance of property_store as a class member and use it to create (and store at runtime) other properties
         use these methods of the descriptor to get descriptors for various types of properties:
@@ -62,9 +62,10 @@ PROPERTY DESCRIPTORS
                             DO NOT use property descriptors from other classes (not even base classes) in this way, as it would break these classes
                             use inherited() to create a reference to the base class property and add to it
             
-            inherit()
+            inherited()
                 creates a copy of the same property from the base class, so that new observers can be added without breaking the base class
                 use this for triggers or cached object that depend on properties of the base class
+                inherited is a class method, so it can be used to create triggers without defining a specific property store for the subclass
             
             bindable(default_value = None, *, readonly = false)
                 special property that can be set to a reference to something else
@@ -97,6 +98,7 @@ PROPERTY DESCRIPTORS
         decorates a class declared inside another class
         returns a descriptor that creates an instance of the class on access, and assigns it to the instance, in a member with the same name as the class
         the class gives access to autocreate.parent_reference(), which gives access to the containing class
+        decorating a member function will result in a write-once-read-many member variable that is initialised on access with the provided function and cached thereafter
         NOTE: although cached properties work well across the structure, triggers don't at the moment
 
         Example usage:
@@ -110,7 +112,7 @@ PROPERTY DESCRIPTORS
                     props = property_store()
                     ip1 = props.reactive(2)
                     
-                    @parent.op1.trigger #NOTE: currently raises an exception
+                    @parent.op1.trigger
                     def on_op1(self, source):
                         print(self.parent.op1)
                     
@@ -136,10 +138,15 @@ PROPERTY DESCRIPTORS
                 def op2(self):
                     return (self.op1,self.inner.ip1,self.inner.inner_inner.iip1)
 
+                @autocreate
+                def op3(self):
+                    return 42
+
             o = outer()
             o.op1 = 4
             o.inner.ip1 = 5
             o.inner.inner_inner.iip1 = 6
+            o.op3
 
 """
 
@@ -196,6 +203,11 @@ class observable:
             raise AttributeError(f"Property {self.name} of class {type(instance).__name__} is readonly")
         self.get_slot(instance).value = value
 
+    def copy(self):
+        tmp = type(self)(default_value=self.default_value, readonly=self.readonly, store=self.store)
+        tmp.name = self.name
+        return tmp
+
 class observable_reference(observable):
     def __init__(self, ref):
         vars(self)["_ref"] = ref
@@ -219,6 +231,9 @@ class observable_reference(observable):
     
     # def __setattr__(self,name,value):
     #     setattr(self._ref,name,value)
+    
+    def copy(self):
+        return self._ref.copy()
 
 class property_store:
     class attribute_reference(observable.instance_helper):
@@ -320,8 +335,9 @@ class property_store:
     def constant(self, *args, **kwargs):
         return constant(*args, **kwargs)
     
+    @classmethod
     def inherited(self):
-        return inherited_reference(store=self)
+        return inherited_reference()
 
 class reactive(observable):
     class instance_helper(observable.instance_helper):
@@ -390,6 +406,12 @@ class reactive(observable):
         self.add_observer(fnc)
         return fnc
 
+    def copy(self):
+        tmp = type(self)(default_value=self.default_value, readonly=self.readonly, store=self.store)
+        tmp.name = self.name
+        tmp.observers = dict(self.observers)
+        return tmp
+
 class reactive_reference(reactive):
     def __init__(self, ref):
         vars(self)["_ref"] = ref
@@ -419,17 +441,19 @@ class reactive_reference(reactive):
 
     def del_observer(self, key):
         self._ref.del_observer(key)
+    
+    def copy(self):
+        return self._ref.copy()
 
 class inherited_reference(reactive):
     def __set_name__(self, owner, name):
-        self.name = name
-        self.store.slots[name] = self
-        parent = getattr(super(owner,owner), self.name)
-        self.default_value = parent.default_value
-        self.readonly = parent.readonly
-        tmp = dict(parent.observers)
-        tmp.update(self.observers)
-        self.observers = tmp
+        parent = getattr(super(owner,owner), name)
+        tmp = parent.copy()
+        #if the inherited descriptor was not reactive, this will throw
+        for key, fnc in self.observers.items():
+            tmp.add_observer(fnc, key)
+        #replace the descriptor
+        setattr(owner,name,tmp)
 
 class constant(reactive, reactive.instance_helper):
     def __init__(self, value):
@@ -475,6 +499,9 @@ class constant(reactive, reactive.instance_helper):
     
     def raise_alert(self, source=None):
         raise RuntimeError("Constant property cannot really alert for modification!")
+    
+    def copy(self):
+        return self
 
 class bindable(reactive):
     class instance_helper(reactive.instance_helper):
@@ -591,6 +618,12 @@ class cached(reactive):
         self.getter = getter
         return self
 
+    def copy(self):
+        tmp = type(self)(*(list(self.dependencies)), store=self.store, getter=self.getter)
+        tmp.name = self.name
+        tmp.observers = dict(self.observers)
+        return tmp
+
 def call(function_to_call, *, args=(), kwargs={}, append=False, mixargs=False):
     "decorator that prepends or appends a member function call to the decorated member function, putting args or kwargs to None passes the ones given in the call. always returns the value of the decorated function"
     def decorate(function):
@@ -682,6 +715,29 @@ def assignargs(**kwargs):
         return decorated_function
     return decorate
 
+class delayed_trigger:
+    def __init__(self, trg):
+        *refs, prop, fnc = trg
+        self.refs = refs
+        self.prop = prop
+        self.fnc = fnc
+
+    def __call__(self, instance, source):
+        self.fnc(getattr(instance, self.childname), source)
+
+    def attach(self, ownerclass, name):
+        self.childname = name
+        ptr = ownerclass
+        for ref in self.refs:
+            ptr = getattr(ptr,ref)
+        if isinstance(ptr, parent_reference):
+            raise NotImplementedError
+            #mind bending exercise!!!!
+            ptr._delayedTriggers.append(delayed_trigger( (name,)+tuple(self.refs[1:]) + (self.prop,) + (self.fnc,)  ))
+        else:
+            ptr = getattr(ptr, self.prop)
+            ptr.add_observer(self)
+
 class attribute_reference:
     def __init__(self, parent, name):
         self.__parent = parent
@@ -713,29 +769,36 @@ class attribute_reference:
     def __call__(self, *args, **kwargs):
         if self.__name_in_parent == "trigger" and len(args) == 1 and callable(args[0]) and kwargs == {}:
             #used as a decorator for a trigger
-            self.__trigger(args[0])
+            trg = (args[0],)
+            ptr = self.__parent
+            while isinstance(ptr,attribute_reference):
+                trg = (ptr.__name_in_parent, ) + trg
+                ptr = ptr.__parent
+            if isinstance(ptr, parent_reference) or isinstance(ptr, autocreate):
+                ptr._delayedTriggers.append(delayed_trigger(trg))
+            else:
+                raise TypeError
+
             return args[0]
         else:
             raise TypeError("'attribute_reference' object is not callable - unless it's a trigger decorator ;-)")
 
-    def __trigger(self, fnc):
-        raise NotImplementedError #TODO
-
 class parent_reference:
     def __init__(self):
-        self.name = None
-        self.ownerclass = None
+        self.__name = None
+        self.__ownerclass = None
+        self._delayedTriggers = []
     
     def __set_name__(self, owner, name):
-        if self.name != None and not owner is self.ownerclass:
+        if self.__name != None and not owner is self.__ownerclass:
             raise AttributeError("The same parent_reference is assigned to two different classes")
-        self.name = name
-        self.ownerclass = owner
+        self.__name = name
+        self.__ownerclass = owner
 
     def __get__(self, instance, owner=None):
         if instance == None:
             return self
-        return vars(instance)[self.name] #go direct to __dict__
+        return vars(instance)[self.__name] #go direct to __dict__
     
     def __getattr__(self, name):
         return attribute_reference(self, name)
@@ -746,6 +809,7 @@ class autocreate:
     def __init__(self, factory):
         self.name = None
         self.ownerclass = None
+        self._delayedTriggers = []
         if type(factory) is type:
             class wrapper(factory):
                 def __init__(child, parent):
@@ -758,9 +822,11 @@ class autocreate:
             wrapper.__module__ = factory.__module__
             wrapper.__name__ = factory.__name__+"<>"
             self.factory = wrapper
+            self.wrapped = True
         else:
             self.factory = factory
-    
+            self.wrapped = False
+
     def __get__(self, instance, owner=None):
         if instance == None:
             return self
@@ -769,14 +835,26 @@ class autocreate:
             product = self.factory(instance)
             vars(instance)[self.name] = product
         return vars(instance)[self.name]
+
+    #TODO: __set__ could be added to make non-wrapped autocreates modifiable after init
     
     def __set_name__(self, owner, name):
         if self.name != None:
             raise AttributeError("The same autocreate is assigned twice to a class")
         self.name = name
         self.ownerclass = owner
-        #create the triggers that have been queued
-    
+        #create the triggers that have been queued in properties of the outer object
+        if self.wrapped:
+            factory = inspect.getmro(self.factory)[1]
+            for k,v in vars(factory).items():
+                if isinstance(v, parent_reference):
+                    for trg in v._delayedTriggers:
+                        trg.attach(owner, name)
+        
+        #create the triggers that have been queued in properties of the inner object
+        for trg in self._delayedTriggers:
+            raise NotImplementedError
+
     def __getattr__(self, name):
         return attribute_reference(self, name)
     
@@ -969,6 +1047,7 @@ if True and __name__ == "__main__":
             print(f"Pippo now {self.pippo=} {source=}")
 
         bindable_a = _bound.inherited()
+        constant_d2 = _bound.inherited()
 
         @bindable_a.trigger
         def on_binda(self, source):
@@ -978,6 +1057,8 @@ if True and __name__ == "__main__":
     rt._bound
     rt.bindable_c = 22
     rt.bindable_a = 15
+
+    rt.constant_d2
 
     tt3 = test()
     tt3.bindable_a = 234
@@ -1003,9 +1084,9 @@ if __name__ == "__main__":
             props = property_store()
             ip1 = props.reactive(2)
             
-            # @parent.op1.trigger
-            # def on_op1(self, source):
-            #     print(self.parent.op1)
+            @parent.op1.trigger
+            def on_op1(self, source):
+                print(self.parent.op1)
             
             @autocreate
             class inner_inner:
