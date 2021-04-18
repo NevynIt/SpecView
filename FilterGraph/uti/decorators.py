@@ -99,7 +99,6 @@ MEMBER PROPERTY DESCRIPTORS
         returns a descriptor that creates an instance of the class on access, and assigns it to the instance, in a member with the same name as the class
         the class gives access to autocreate.parent_reference(), which gives access to the containing class
         decorating a member function will result in a write-once-read-many member variable that is initialised on access with the provided function and cached thereafter
-        NOTE: although cached properties work well across the structure, triggers don't at the moment
 
         Example usage:
             class outer(some_base_class):
@@ -114,7 +113,7 @@ MEMBER PROPERTY DESCRIPTORS
                     
                     @parent.op1.trigger
                     def on_op1(self, source):
-                        print(self.parent.op1)
+                        print( (self,source) )
                     
                     @autocreate
                     class inner_inner(yet_another_one):
@@ -122,18 +121,22 @@ MEMBER PROPERTY DESCRIPTORS
                         props = property_store()                        
                         iip1 = props.reactive(3)
                     
-                        @parent.parent.op1.trigger #NOTE: currently raises an exception
+                        @parent.parent.op1.trigger
                         def on_op1(self, source):
-                            print(self.parent.parent.op1)
+                            print( (self,source) )
                         
                         @props.cached(iip1, parent.ip1, parent.parent.op1)
                         def iip2(self):
                             return (self.iip1, self.parent.ip1, self.parent.parent.op1)
                 
-                @inner.ip1.trigger #NOTE: currently raises an exception
+                @inner.ip1.trigger
                 def on_ip1(self, source):
-                    pass
-                    
+                    print( (self,source) )
+
+                @inner.inner_inner.parent.parent.inner.inner_inner.parent.parent.op1.trigger
+                def in_and_out(self,source):
+                    print( (self,source) )
+
                 @props.cached(op1,inner.ip1,inner.inner_inner.iip1)
                 def op2(self):
                     return (self.op1,self.inner.ip1,self.inner.inner_inner.iip1)
@@ -716,27 +719,36 @@ def assignargs(**kwargs):
     return decorate
 
 class delayed_trigger:
-    def __init__(self, trg):
-        *refs, prop, fnc = trg
-        self.refs = refs
-        self.prop = prop
+    def __init__(self, fnc, prop_path=(), instance_path=()):
+        self.prop_path = prop_path
+        self.instance_path = instance_path
         self.fnc = fnc
 
     def __call__(self, instance, source):
-        self.fnc(getattr(instance, self.childname), source)
+        for key in self.instance_path:
+            instance = getattr(instance,key)
+        self.fnc(instance, source)
 
-    def attach(self, ownerclass, name):
-        self.childname = name
-        ptr = ownerclass
-        for ref in self.refs:
-            ptr = getattr(ptr,ref)
-        if isinstance(ptr, parent_reference):
-            raise NotImplementedError
-            #mind bending exercise!!!!
-            ptr._delayedTriggers.append(delayed_trigger( (name,)+tuple(self.refs[1:]) + (self.prop,) + (self.fnc,)  ))
-        else:
-            ptr = getattr(ptr, self.prop)
-            ptr.add_observer(self)
+    def attach(self, prop):
+        new_path = ()
+        for key in self.prop_path:
+            prop = getattr(prop,key)
+            new_path = (key,) + new_path
+            if isinstance(prop, parent_reference):
+                if prop._parent_class == None:
+                    #not created yet, delay again
+                    prop._delayedTriggers.append(delayed_trigger(self.fnc,self.prop_path[len(new_path):],self.instance_path))
+                    return
+                else:
+                    self.instance_path = (prop._parent_class.name, ) + self.instance_path
+                    prop = prop._parent_class.ownerclass
+            elif isinstance(prop, autocreate):
+                self.instance_path = (prop.parent_reference_member_name, ) + self.instance_path
+                if prop.wrapped:
+                    prop = inspect.getmro(prop.factory)[1]
+                else:
+                    prop = prop.factory
+        prop.add_observer(self)
 
 class attribute_reference:
     def __init__(self, parent, name):
@@ -769,13 +781,13 @@ class attribute_reference:
     def __call__(self, *args, **kwargs):
         if self.__name_in_parent == "trigger" and len(args) == 1 and callable(args[0]) and kwargs == {}:
             #used as a decorator for a trigger
-            trg = (args[0],)
+            prop_path = ()
             ptr = self.__parent
             while isinstance(ptr,attribute_reference):
-                trg = (ptr.__name_in_parent, ) + trg
+                prop_path = (ptr.__name_in_parent, ) + prop_path
                 ptr = ptr.__parent
             if isinstance(ptr, parent_reference) or isinstance(ptr, autocreate):
-                ptr._delayedTriggers.append(delayed_trigger(trg))
+                ptr._delayedTriggers.append(delayed_trigger(args[0], prop_path))
             else:
                 raise TypeError
 
@@ -787,6 +799,7 @@ class parent_reference:
     def __init__(self):
         self.__name = None
         self.__ownerclass = None
+        self._parent_class = None
         self._delayedTriggers = []
     
     def __set_name__(self, owner, name):
@@ -843,19 +856,24 @@ class autocreate:
             raise AttributeError("The same autocreate is assigned twice to a class")
         self.name = name
         self.ownerclass = owner
+        self.parent_reference_member_name = None
         #create the triggers that have been queued in properties of the outer object
         if self.wrapped:
             factory = inspect.getmro(self.factory)[1]
             for k,v in vars(factory).items():
                 if isinstance(v, parent_reference):
+                    self.parent_reference_member_name = k
+                    v._parent_class = self
                     for trg in v._delayedTriggers:
-                        trg.attach(owner, name)
+                        trg.instance_path = (name, ) + trg.instance_path
+                        trg.attach(owner)
         
         #create the triggers that have been queued in properties of the inner object
         for trg in self._delayedTriggers:
-            raise NotImplementedError
+            trg.prop_path = (name, ) + trg.prop_path
+            trg.attach(owner)
 
-    def __getattr__(self, name):
+    def __getattr__(self, name): #TODO: fix member names so that they do not obscure too much the user defined __getattr__
         return attribute_reference(self, name)
     
 if True and __name__ == "__main__":
@@ -902,9 +920,9 @@ if True and __name__ == "__main__":
             def h(self):
                 return self.d + self.parent.b
 
-            # @parent.b.trigger
-            # def on_parent_b(self, source):
-            #     print("On parent B")
+            @parent.b.trigger
+            def on_parent_b(self, source):
+                print("On parent B")
 
             @autocreate
             class grandson:
@@ -1094,18 +1112,22 @@ if __name__ == "__main__":
                 props = property_store()                        
                 iip1 = props.reactive(3)
             
-                # @parent.parent.op1.trigger
-                # def on_op1(self, source):
-                #     print(self.parent.parent.op1)
+                @parent.parent.op1.trigger
+                def on_op1(self, source):
+                    print(self.parent.parent.op1)
                 
                 @props.cached(iip1, parent.ip1, parent.parent.op1)
                 def iip2(self):
                     print("iip2")
                     return (self.iip1, self.parent.ip1, self.parent.parent.op1)
         
-        # @inner.ip1.trigger
-        # def on_ip1(self, source):
-        #     pass
+        @inner.ip1.trigger
+        def on_ip1(self, source):
+            print(self.inner.ip1)
+
+        @inner.inner_inner.parent.parent.inner.inner_inner.parent.parent.op1.trigger
+        def in_and_out(self,source):
+            print( (self,source) )
             
         @props.cached(op1,inner.ip1,inner.inner_inner.iip1)
         def op2(self):
