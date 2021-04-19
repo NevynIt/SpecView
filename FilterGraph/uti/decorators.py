@@ -44,16 +44,16 @@ MEMBER PROPERTY DESCRIPTORS
                         promises to call fnc(source) as soon as the value of the property has changed
                     del_observer(key)
                         removed the callback fnc from the list
-                    alert(source = None)
+                    alert(reason = None)
                         receives a notification from source, the default behaviour is to pass the alert to the observers as is
-                    raise_alert(source = None)
+                    raise_alert(reason = None)
                         internal implementation to call each of the callbacks
                         if source = none, will pass self to each callback
                 the descriptor itself includes
                     add_observer(fnc, key=None)
                         promises to call fnc(source) bound to the actual instance as soon as the value of the property has changed
-                        fnc should take a single argument, which will be the source object that initiated the alert chain
-                        (maybe I could make it a tuple with all the objects that were alerted one after another. one could take this from the call stack)
+                        fnc should take a single argument, which will be the reason of the alert
+                        the reason is a tuple of object, with the "closest" reasons first, and the very initial reason last
                     del_observer(key)
                         removed the callback fnc from the list
                     trigger(fnc)
@@ -154,6 +154,7 @@ MEMBER PROPERTY DESCRIPTORS
 """
 
 import types, inspect
+from collections import namedtuple
 
 __all__ = ("baseinit", "call", "assign", "assignargs", "property_store", "autocreate")
 
@@ -342,7 +343,11 @@ class property_store:
     def inherited(self):
         return inherited_reference()
 
+alert_reason = namedtuple("alert_reason", ("originator","event","args"))
+
 class reactive(observable):
+    alert_params = namedtuple("alert_params", ("old_value","new_value")) #this should have a better name
+
     class instance_helper(observable.instance_helper):
         def __init__(self, descriptor):
             super().__init__(descriptor)
@@ -359,8 +364,9 @@ class reactive(observable):
         
         @value.setter
         def value(self, v):
+            old_value = self._value
             self._value = v
-            self.raise_alert()
+            self.raise_alert( (alert_reason(self,"set",reactive.alert_params(old_value, v)),) )
 
         def check_circular_binding(self, tgt):
             pass
@@ -374,14 +380,12 @@ class reactive(observable):
         def del_observer(self, key):
             del self.observers[key]
 
-        def raise_alert(self, source = None):
-            if source == None:
-                source = self
+        def raise_alert(self, reason):
             for fnc in self.observers.values():
-                fnc(source)
+                fnc(reason)
         
-        def alert(self, source = None):
-            self.raise_alert(source)
+        def alert(self, reason):
+            self.raise_alert(reason)
 
         @property
         def reactive(self):
@@ -500,13 +504,18 @@ class constant(reactive, reactive.instance_helper):
     def reactive(self):
         return True
     
-    def raise_alert(self, source=None):
+    def raise_alert(self, reason):
         raise RuntimeError("Constant property cannot really alert for modification!")
     
+    def alert(self, reason):
+        pass #ignore alerts
+
     def copy(self):
         return self
 
 class bindable(reactive):
+    alert_params = namedtuple("alert_params", ("bound","target"))
+
     class instance_helper(reactive.instance_helper):
         def __init__(self, descriptor):
             super().__init__(descriptor)
@@ -523,10 +532,11 @@ class bindable(reactive):
         @value.setter
         def value(self, v):
             if self.bound:
-                self._value.value = v
+                self._value.value = v #do not alert twice, let the bond do the alert
             else:
+                old_value = self._value
                 self._value = v
-            self.raise_alert()
+                self.raise_alert( (alert_reason(self,"set",reactive.alert_params(old_value, v)),) )
 
         @property
         def binding(self):
@@ -544,6 +554,9 @@ class bindable(reactive):
 
         @binding.setter
         def binding(self, value):
+            old_bound = self.bound
+            old_value = self._value
+
             if value == None:
                 if self.bound == True and self._value.reactive:
                     self._value.del_observer(id(self)) #check it is reactive first
@@ -556,14 +569,17 @@ class bindable(reactive):
                 self.bound = True
                 self._value = value
                 if self._value.reactive:
-                    self._value.add_observer(self.alert, id(self))
+                    self._value.add_observer(self.bound_alert, id(self))
             else:
                 if self.bound == True and self._value.reactive:
                     self._value.del_observer(id(self))
                 self.bound = False
                 self._value = value
-            self.raise_alert()
+            self.raise_alert( (alert_reason(self,"bind",reactive.alert_params(bindable.alert_params(old_bound,old_value),bindable.alert_params(self.bound, self._value))),) )
 
+        def bound_alert(self, reason):
+            self.raise_alert( (alert_reason(self,reason[0].event,reason[0].args),) + reason )
+        
         @property
         def reactive(self):
             if self.bound:
@@ -571,6 +587,7 @@ class bindable(reactive):
             return True
 
 class cached(reactive):
+    alert_params = namedtuple("alert_params", ("old_value",) )
     class instance_helper(reactive.instance_helper):
         def __init__(self, descriptor):
             super().__init__(descriptor)
@@ -588,15 +605,15 @@ class cached(reactive):
                 slot.add_observer(self.invalidate)
                 self.dependencies.append(slot)
 
-        def invalidate(self, source=None):
-            if source == None:
-                source = self
+        def invalidate(self, reason):
             self.valid = False
+            old_value = self._value
             self._value = None
-            for dep in self.dependencies:
-                if not dep.reactive:
-                    raise RuntimeError("Cached object dependencies must stay reactive all the time")
-            self.raise_alert(source)
+            # for dep in self.dependencies: #this could be more clever and only check the object that raised the alert
+            #     if not dep.reactive:
+            if reason[0].originator in self.dependencies and not reason[0].originator.reactive:
+                raise RuntimeError("Cached object dependencies must stay reactive all the time")
+            self.raise_alert( (alert_reason(self, "invalidate", cached.alert_params(old_value)), ) + reason)
 
         @property
         def value(self):
