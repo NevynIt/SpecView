@@ -41,6 +41,10 @@ class WavReader:
         return (self.params.nframes, self.params.nchannels)
 
     @property
+    def dims(self):
+        raise NotImplementedError
+
+    @property
     def dtype(self):
         if self.params == None:
             return np.int16
@@ -63,10 +67,8 @@ class WavReader:
         return tmp[::newkey[0].step,newkey[1]]        
 
     def __array__(self, dtype=None):
-        if self.params == None:
-            return np.zeros( (0,0), dtype=np.int16 )
         if dtype == None:
             dtype = self.dtype
-        
-        return self[:]
-        
+        if self.params == None:
+            return np.zeros( (0,0), dtype=dtype )
+        return self[:].astype(dtype)
