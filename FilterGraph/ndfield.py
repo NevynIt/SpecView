@@ -20,7 +20,7 @@ class axis_info:
                     True for discrete domains
                     False for continuous domains
         index_domain:
-            same as axis_domain, but referred to the 
+            same as axis_domain, but referred to the codomain of the to_index function
         to_index(coordinates, rounding = None):
             arguments
                 coordinates: number, slice, iterable with numbers
@@ -30,7 +30,7 @@ class axis_info:
                     None - use the default for the axis
                     floor - always return the closest, but lower, index
                     ceil - always return the closest, but higher, index
-                    closest - always return the closest (lower or higher) index
+                    round - always return the closest (lower or higher) index
                     throw - throw an exception if a exact match cannot be found
                     exact - no rounding is done
                         may throw an exception for discrete axes

@@ -4,6 +4,9 @@ import numpy as np
 import wave, numbers
 import itertools
 
+from .ndfield import *
+from .linear_axis import linear_sampled_axis
+
 def prockey(key, shape):
     if isinstance(key,numbers.Integral) or isinstance(key,slice):
         key = (key,)
@@ -40,9 +43,22 @@ class WavReader:
             return (0,0)
         return (self.params.nframes, self.params.nchannels)
 
-    @property
-    def dims(self):
-        raise NotImplementedError
+    @cdh.autocreate
+    class axes:
+        props = cdh.property_store()
+        parent = cdh.autocreate.parent_reference()
+        
+        @cdh.autocreate
+        class time(linear_sampled_axis):
+            parent = cdh.autocreate.parent_reference()
+            unit = cdh.property_store.constant("s")
+            @property
+            def params(self):
+                params = self.parent.parent.params
+                if params == None:
+                    return (0,0,1)
+                else:
+                    return (0,params.nframes/params.framerate,1/params.framerate)
 
     @property
     def dtype(self):
