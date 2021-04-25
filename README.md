@@ -1,3 +1,134 @@
+# Concept again
+The basic idea is that I am designing objects that refer to n-dimensional fields
+
+There will be objects that represent the field, and that map from coordinates in n axes
+to something (scalars, vectors, objects, as in ndarrays)
+these axes can be bounded, unbounded, continuous, sampled or discrete
+objects can provide new fields that are based on parameters (including other fields)
+examples are objects that sample a continuous axis, or that make a bounded one unbounded (e.g. making it periodic).
+When new fields are based on other fields, these should be, as much as possible, lazy views over the others. when a field is a projection of another field (including the field resulting from a sampler or an interpolator), and regardless if this other field is actually accessible as an object, it is useful to have a function that maps coordinates in the new field to coordinates in the old, and vice-versa
+
+# Field object interface:
+Attributes:
+- `shape`: `tuple` of numbers with the lengh of each axis. can be `np.inf`, `-np.inf` or `None` if undefined
+- `axes`: axes_object
+- `coordspace`: array interface over the original domain
+- `samplespace`: array interface over the sampled domain - alias of coordspace if not sampled
+
+Methods:
+- `to_index(coords)`
+  - takes coordinates or ranges in the original domain and returns indexes or slices in the domain of the sampled field
+- `from_index(coords)`
+  - takes coordinates or slices in the domain of the sampled field and returns coordinates or ranges in the original domain
+- `__getitem__`: alias for access to `samplespace`
+- `__array__`: if the field is discrete or sampled and bounded on all axes, it provides returns a `numpy.ndarray`
+
+# Interesting fields:
+## Sound
+Dimensions:
+- `time`: continuous, measured in seconds
+- `channels`: discrete
+
+Values: Real number, representing the pressure on each microphone
+
+# Field transformations
+## Sampling
+Parameters:
+- original field
+- sampling space: tuple of (phase, rate) or None for axes that are not sampled
+- rounding: approach to use when indexes are not exact in to_index or from_index
+
+Dimensions: 
+- same as the original field for some (continuous, discrete or whatever)
+- discrete, indexed by sample, for one or more fields
+
+Values: same as the original field
+
+## Quantisation (maybe)
+Parameters:
+- original field
+- quantization parameters: phase, step
+- rounding
+
+Dimensions:
+- same as the original field
+
+Values:
+- quantised version of the original values
+
+## Bounding
+Parameters:
+- original field
+- `range`: tuple of (start, stop) or None for axes that are not to be bound
+- `clip`: (min, max) or None to clip the values
+
+Dimensions:
+- same as the original field, but with some applicable to a limited space
+
+Values:
+- same as the original field, for a subset of the coordinates
+
+## Padding:
+Parameters:
+- original field
+- padding value: what to return outside the original bounds, can be a number or a function defined over the same n-dimensional space or a field
+- axes: which axes to pad, and in which direction (towards -inf, or +inf, or both)
+
+Dimensions:
+- same as the original field, with some unbounded
+
+Values:
+- same as the original field, or the padding value where the original field was not defined
+
+## Interpolation
+
+## Linear transform
+It assumes that ([value or coordinate]*scale + offset) will return something valid
+
+Parameters:
+- original field
+- transformations of coordinates: tuple of (offset and scale) or None for axed not transformed
+- transformation of values: offset and scale or None for axes not transformed
+
+Methods:
+- to_value()
+- from_value()
+
+## FFT
+Calculates the FFT of the original field over the given axis. The number of elements in the window field provided determines the number of samples that the FFT will use (and therefore the amount of original field space that will be considered as the periodic subset in each point). Window-lenght samples are taken from the original field starting from the position requested over the axis minus window-lenght/2.
+
+Parameters:
+- `axis` to transform (axis 0 by default)
+- original field (must be sampled and have numeric values)
+- `window`: a 1-dimensional discrete field returning the window function used on the samples
+
+Dimensions:
+- same as the original with the following addition
+- the last dimension is the frequency bins, it's discrete and contains as many items as the size of the window, the axis domain is frequencies up to the Nyquist frequency, given by 1/sample-rate / 2
+
+Values:
+- Complex numbers as returned by FFT
+
+Methods:
+- `set_window(lenght, fnc or name or None)`:
+  - length is defined in the unit of the axis in the original field
+  - name can be:
+     - one of "hanning", "blackman", etc... to use one of the default numpy windowing functions
+     - a callable, which will receive a single float from 0 to 1, and should return a float between 0 and 1
+     - None is equivalent to using a single windowing function that always returns 1
+
+## Phase vocoder
+Parameters:
+- original field (must be a FFT field over something else)
+- scale factor: float, 1 = unscaled
+- equalization field: optional field that gives the amplification to apply per sample per frequency bin; it must have the same dimensions and shape as the FFT field
+
+Dimensions:
+- same as the original field of the input FFT field
+
+Values:
+- same domain as the original field of the input FFT field 
+
 # Dependencies:
  - Numpy
  - Kivy for graphics
