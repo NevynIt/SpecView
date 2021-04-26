@@ -39,12 +39,29 @@ class domain:
     @property
     def lenght(self):
         return self.stop-self.start
+    
+    def intersect(self, x):
+        if isinstance(x,numbers.Number):
+            if x >= self.start and x<=self.stop:
+                return x
+            else:
+                return None
+        elif isinstance(x, slice):
+            if self.step == None:
+                return slice(np.max(self.start,x.start),np.min(self.stop,x.stop),x.step)
+            elif x.step == None:
+                #adjust the start so that it lands on a valid coordinate iaw self.step
+                raise NotImplementedError
+            else:
+                #TODO: more difficult, we have to consider the phase of the steps and how the steps will interact
+                #rounding considerations apply. shall we only return if the coordinates are valid and exact?
+                raise NotImplementedError
 
 class axis_info:
-    unit = cdh.constant("")
-    annotations = cdh.constant( () )
-    axis_domain = cdh.constant( None )
-    index_domain = cdh.constant( None )
+    unit = cdh.default("")
+    annotations = cdh.default( () )
+    axis_domain = cdh.default( None )
+    index_domain = cdh.default( None )
     def to_index(self, x):
         raise NotImplementedError
     def from_index(self, i):

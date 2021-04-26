@@ -13,8 +13,7 @@ class ndfield:
     def axes(self):
         raise NotImplementedError
 
-    @property
-    def samplespace(self):
+    def samplespace(self, i):
         raise NotImplementedError
 
     @property
@@ -24,14 +23,10 @@ class ndfield:
     @property
     def shape(self):
         "default implementation calculates the number from the axes"
-        return [a.lenght for a in self.axes]
+        return tuple([a.lenght for a in self.axes])
 
-    @autocreate
-    class coordspace:
-        parent = cdh.parent_reference()
-
-        def __getitem__(self, x):
-            return self.parent.samplespace[self.parent.to_index(x)]
+    def coordspace(self, x):
+        return self.samplespace(self.parent.to_index(x))
 
     def to_index(self, x):
         if not isinstance(x, tuple):
@@ -44,12 +39,12 @@ class ndfield:
         return tuple([a.from_index(ii) for a, ii in zip(self.axes, i)])
 
     def __getitem__(self, i):
-        return self.samplespace[i]
+        return self.samplespace(i)
 
     def __array__(self, dtype = None):
         if all([(a.nsamples != None and a.nsamples < np.inf) for a in self.axes]):
             if dtype == None:
                 dtype = self.dtype
-            return np.array(self.samplespace[...], dtype=dtype)
+            return np.array(self.samplespace(...), dtype=dtype)
         else:
             return None #not sure this is the right way to do it... maybe numpy will raise...

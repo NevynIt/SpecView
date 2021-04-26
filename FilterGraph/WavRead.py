@@ -5,7 +5,6 @@ import wave, numbers
 import itertools
 
 from .ndfield import *
-from .linear_axis import linear_sampled_axis
 
 def prockey(key, shape):
     if isinstance(key,numbers.Integral) or isinstance(key,slice):
@@ -21,7 +20,7 @@ def prockey(key, shape):
         res.append(slice(*k.indices(s)))
     return res
 
-class WavReader:
+class WavReader(ndfield):
     props = cdh.property_store()
     filename = props.bindable()
 
@@ -37,34 +36,25 @@ class WavReader:
         except Exception as e:
             return None
 
-    @property
-    def shape(self):
-        if self.params == None:
-            return (0,0)
-        return (self.params.nframes, self.params.nchannels)
-
-    @cdh.autocreate
-    class axes:
-        props = cdh.property_store()
-        parent = cdh.autocreate.parent_reference()
-        
-        @cdh.autocreate
-        class time(linear_sampled_axis):
-            parent = cdh.autocreate.parent_reference()
-            unit = cdh.property_store.constant("s")
-            @property
-            def params(self):
-                params = self.parent.parent.params
-                if params == None:
-                    return (0,0,1)
-                else:
-                    return (0,params.nframes/params.framerate,1/params.framerate)
+    @props.cached(params)
+    def axes(self):
+        params = self.params
+        if params == None:
+            params = wave._wave_params(1,1,1,0,"NONE","")
+        time = linear_sampled_axis()
+        time.unit = "s"
+        time.axis_domain = domain(0, params.nframes/params.framerate, 1/params.framerate)
+        channels = identity_axis()
+        channels.axis_domain = domain(0,params.nchannels,1)
+        return (time, channels)
 
     @property
     def dtype(self):
         if self.params == None:
             return np.int16
         return np.dtype(f"<i{self.params.sampwidth}")
+
+    # shape = props.cached(params, getter=ndfield.shape.getter)
 
     def read(self,pos,frames):
         if frames <= 0:
@@ -75,16 +65,13 @@ class WavReader:
             data = w.readframes(frames)
             return np.frombuffer(data, f"<i{self.params.sampwidth}").reshape( (frames, self.params.nchannels) )
 
-    def __getitem__(self, key):
+    def samplespace(self, i):
+        i1 = self.axes[0].index_domain.intersect(i)
+        #TODO: continue from here
+        
+        raise NotImplementedError
         newkey  = prockey(key, self.shape)
         if newkey == None:
             raise IndexError(f"index {key} is not valid or out of bounds")
         tmp = self.read(newkey[0].start,newkey[0].stop-newkey[0].start)
-        return tmp[::newkey[0].step,newkey[1]]        
-
-    def __array__(self, dtype=None):
-        if dtype == None:
-            dtype = self.dtype
-        if self.params == None:
-            return np.zeros( (0,0), dtype=dtype )
-        return self[:].astype(dtype)
+        return tmp[::newkey[0].step,newkey[1]]
