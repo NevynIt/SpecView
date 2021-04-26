@@ -14,6 +14,7 @@ Attributes:
 - `axes`: axes_object
 - `coordspace`: array interface over the original domain
 - `samplespace`: array interface over the sampled domain - alias of coordspace if not sampled
+- `dtype`: the data type returned as values
 
 Methods:
 - `to_index(coords)`
@@ -22,6 +23,30 @@ Methods:
   - takes coordinates or slices in the domain of the sampled field and returns coordinates or ranges in the original domain
 - `__getitem__`: alias for access to `samplespace`
 - `__array__`: if the field is discrete or sampled and bounded on all axes, it provides returns a `numpy.ndarray`
+
+# axes_object interface:
+Can be seen as a list of axes, indexable by position. In reality it is likely to be an autocreate object derived from axes_object, which has the following structure:
+
+Attributes:
+- axes: class attribute, which subclasses should set to a tuple of the actual axes declared (as autocreate) in the axes_object
+- parent: reference to parent class
+
+```
+import ndfields as ndf
+
+class myfield(ndf.ndfield):
+     @autocreate
+     class axes(ndf.axes_object):
+          @autocreate
+          class time(ndf.linear_sampled_axis):
+               ...set the parameters
+          
+          @autocreate
+          class channels(ndf.linear_discrete_axis):
+               ...set the parameters
+          
+          axes = (time, channels)
+```
 
 # Interesting fields:
 ## Sound
@@ -32,6 +57,26 @@ Dimensions:
 Values: Real number, representing the pressure on each microphone
 
 # Field transformations
+## Caching
+Parameters:
+- original field (must be sampled or discrete along all axes)
+- page-size: tuple with page size per axis (a page is a hyper-parallelogram with the defined dimensions)
+
+Dimensions:
+- same as the original field
+
+Values:
+- same as the original field
+
+Attributes:
+- `pagesize`: bytes used by each page
+- `oldestpage`: timestamp of the page used least recently
+- `loadedpages`: number of pages currently loaded
+
+Methods:
+- `unloadpage`: unloads the least recently used page from memory
+- `invalidate(range)`: invalidates (and unloads) all the pages that intersect the given range (expressed as in `__getattr__`)
+
 ## Sampling
 Parameters:
 - original field
@@ -80,8 +125,6 @@ Dimensions:
 Values:
 - same as the original field, or the padding value where the original field was not defined
 
-## Interpolation
-
 ## Linear transform
 It assumes that ([value or coordinate]*scale + offset) will return something valid
 
@@ -118,10 +161,13 @@ Methods:
      - None is equivalent to using a single windowing function that always returns 1
 
 ## Phase vocoder
+Start from [audiotsm](https://github.com/Muges/audiotsm/) analysis_synthesis for the implementation, and leverage the FFT field for computation
+
 Parameters:
 - original field (must be a FFT field over something else)
 - scale factor: float, 1 = unscaled
-- equalization field: optional field that gives the amplification to apply per sample per frequency bin; it must have the same dimensions and shape as the FFT field
+- analysis hop
+- equalization: optional field that gives the amplification to apply per sample per frequency bin; it must have the same dimensions and shape as the FFT field
 
 Dimensions:
 - same as the original field of the input FFT field
@@ -129,6 +175,36 @@ Dimensions:
 Values:
 - same domain as the original field of the input FFT field 
 
+## Interpolation
+Parameters:
+- original field
+- method: nearest neighbour, linear, polynomial
+
+## Logarithmic view
+Parameters:
+- original field
+- axis to provide a logaritmic view of
+- method: interpolation, integral (useful for frequency bins)
+
+## numpy.ufunc application (maybe?)
+returns a field that applies the result of the given ufunc over the provided source fields when indexed. all fields are indexed with the same indexes, and the result is passed to the ufunc. This field could be used to implement operations between fields and/or ndarrays using the numpy universal functions
+
+Parameters:
+- original fields: must all be sampled or discrete and bounded, and broadcastable to the same shape
+- ufunc, method: same as in `__array_ufunc__`
+
+Dimensions:
+- discrete "thing" based on whatever comes from the ufunc (?)
+
+Values:
+- whatever comes from the
+
+---
+---
+previous ideas...
+---
+---
+---
 # Dependencies:
  - Numpy
  - Kivy for graphics
