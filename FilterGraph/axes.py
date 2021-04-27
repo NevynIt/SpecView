@@ -5,8 +5,8 @@ import numpy as np
 class domain:
     """ start is a valid coordinate, and determines the phase for the sampling """
 
-    @cdh.assignargs(start=-np.inf, stop=np.inf, step = None)
-    def __init__(self, start, stop, step):
+    @cdh.assignargs(start=-np.inf, stop=np.inf, step = None, phase = None)
+    def __init__(self, start, stop, step, phase):
         pass
 
     @property
@@ -17,6 +17,22 @@ class domain:
         if v == 0 or v==np.inf or v==-np.inf:
             v = None
         self._step = v
+
+    @property
+    def phase(self):
+        if self.step == None:
+            return None
+        ph = getattr(self, "_step", None)
+        if ph==None:
+            if self.start == -np.inf:
+                return 0
+            else:
+                return self.start % self.step
+        else:
+            return ph % self.step
+    @phase.setter
+    def phase(self, v)
+        self._phase = v
 
     @property
     def sampling_rate(self):
@@ -66,6 +82,7 @@ class axis_info:
         raise NotImplementedError
     def from_index(self, i):
         raise NotImplementedError
+    interpolator = cdh.parent_reference_host()
 
 class identity_axis(axis_info):
     @property
@@ -76,6 +93,29 @@ class identity_axis(axis_info):
         return x
     def from_index(self,i):
         return i
+
+class interpolator_base:
+    def find_indexes(self, i):
+        "find the indexes required to provide the interpolated value for the indexes in i"
+        return i
+    
+    def interpolate(self, i, ip, vp, axis):
+        """
+        vp is n-dimensional, but interpolate needs only to consider the given axis, and return a new n-dim array
+        in which based on the values for the coordinates ip (chosen by find_indexes) the values in the coordinates i
+        are returned.
+        e.g. a 3d array with linear interpolation requires 8 data points per interpolated point, 2 per axis
+             if we are to linearly interpolate, we get first 4 data points interpolated along 1 axis,
+             then 2 data points interpolated along 2 axis, then 1 data point interpolated along all 3
+        """
+        return vp
+
+class floor_interpolator(interpolator_base):
+    def find_indexes(self, i):
+        return np.floor(i)
+    
+    def interpolate(self, i, ip, vp, axis):
+        return vp
 
 class linear_sampled_axis(axis_info):
     """

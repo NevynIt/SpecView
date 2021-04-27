@@ -22,7 +22,7 @@ class ndfield:
 
     @property
     def shape(self):
-        "default implementation calculates the number from the axes"
+        "default implementation calculates the shape from the axes"
         return tuple([a.lenght for a in self.axes])
 
     def coordspace(self, x):
