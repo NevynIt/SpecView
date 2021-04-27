@@ -67,7 +67,7 @@ class WavReader(ndfield):
 
     def samplespace(self, i):
         i1 = self.axes[0].index_domain.intersect(i)
-        #TODO: continue from here
+        #TODO: continue from here - samplespace gets asked for a grid of indexes. i.e.: i is an array of M arrays, with M = len(shape)
         
         raise NotImplementedError
         newkey  = prockey(key, self.shape)
