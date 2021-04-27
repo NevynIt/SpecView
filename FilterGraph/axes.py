@@ -73,6 +73,17 @@ class domain:
                 #rounding considerations apply. shall we only return if the coordinates are valid and exact?
                 raise NotImplementedError
 
+    def arange(self):
+        l = self.lenght
+        if l>0 and l<np.inf and self.step != None:
+            ph = self.phase
+            if ph == 0:
+                return np.arange(self.start, self.stop, self.step)
+            else:
+                return np.arange(self.start+self.step-self.phase, self.stop, self.step)
+        else:
+            return None
+
 class axis_info:
     unit = cdh.default("")
     annotations = cdh.default( () )
@@ -82,7 +93,7 @@ class axis_info:
         raise NotImplementedError
     def from_index(self, i):
         raise NotImplementedError
-    interpolator = cdh.parent_reference_host()
+    interpolator = cdh.parent_reference_host( cdh.default( interpolator_base() ) ) #TODO: TEST TEST
 
 class identity_axis(axis_info):
     @property
@@ -99,7 +110,7 @@ class interpolator_base:
         "find the indexes required to provide the interpolated value for the indexes in i"
         return i
     
-    def interpolate(self, i, ip, vp, axis):
+    def interpolate(self, i, ip, vp, axis=None):
         """
         vp is n-dimensional, but interpolate needs only to consider the given axis, and return a new n-dim array
         in which based on the values for the coordinates ip (chosen by find_indexes) the values in the coordinates i
@@ -107,6 +118,8 @@ class interpolator_base:
         e.g. a 3d array with linear interpolation requires 8 data points per interpolated point, 2 per axis
              if we are to linearly interpolate, we get first 4 data points interpolated along 1 axis,
              then 2 data points interpolated along 2 axis, then 1 data point interpolated along all 3
+
+        When axis = None, i is multidimensional and works on the whole ndarray
         """
         return vp
 
@@ -125,6 +138,7 @@ class linear_sampled_axis(axis_info):
 
     props = cdh.property_store()
     axis_domain = props.reactive( None )
+    interpolator = cdh.parent_reference_host( cdh.default( floor_interpolator() ) ) #TODO: TEST TEST
 
     @props.cached(axis_domain)
     def index_domain(self):

@@ -14,6 +14,7 @@ class ndfield:
         raise NotImplementedError
 
     def samplespace(self, i):
+        "samplespace gets asked for a grid of indexes. i.e.: i is an array of M arrays, with M = len(shape)"
         raise NotImplementedError
 
     @property
@@ -25,8 +26,19 @@ class ndfield:
         "default implementation calculates the shape from the axes"
         return tuple([a.lenght for a in self.axes])
 
+    @cdh.autocreate
+    class interpolator(interpolator_base):
+        """Uses the interpolators from each axis, in sequence, to interpolate over n-dimensions"""
+        parent = cdh.parent_reference()
+
+        def find_indexes(self, i):
+            raise NotImplementedError
+        
+        def interpolate(self, i, ip, vp):
+            raise NotImplementedError
+
     def coordspace(self, x):
-        return self.samplespace(self.parent.to_index(x))
+        return self[self.to_index(x)]
 
     def to_index(self, x):
         if not isinstance(x, tuple):
@@ -38,8 +50,38 @@ class ndfield:
             return self.axes[0].from_index(i)
         return tuple([a.from_index(ii) for a, ii in zip(self.axes, i)])
 
-    def __getitem__(self, i):
-        return self.samplespace(i)
+    def __getitem__(self, key):
+        #transform key in specific indexes
+        if not isinstance(key, tuple):
+            key = (key,)
+        if len(key) > len(self.axes):
+            raise IndexError
+        el = sum([i == ... for i in key])
+        if el > 1:
+            raise IndexError
+        elif el == 1:
+            raise NotImplementedError
+        else:
+            key = key + (slice(), ) * (len(key) - len(self.axes))
+        ind = []
+        for i in range(len(key)):
+            k = key[i]
+            if isinstance(k, slice):
+                if k == slice():
+                    ind.append(self.axes[i].index_domain.arange())
+                else:
+                    sl = slice(k.start or self.axes[i].index_domain.start, k.stop or self.axes[i].index_domain.stop, k.step or self.axes[i].index_domain.step)
+                    if sl.step == None or sl.step == 0 or l == np.inf:
+                        raise IndexError
+                    ind.append(np.arange(sl.start,sl.stop,sl.step))
+            elif isinstance(k, numbers.Number):
+                ind.append(np.asarray(k)) #TODO: not sure here
+            else: #assume it's a ndarray, TODO more checking
+                ind.append(k)
+        ind = np.asarray(ind)
+        ip = self.interpolator.find_indexes(ind)
+        vp = self.samplespace(ip)
+        return self.interpolator.interpolate(ind, ip, vp)
 
     def __array__(self, dtype = None):
         if all([(a.nsamples != None and a.nsamples < np.inf) for a in self.axes]):
