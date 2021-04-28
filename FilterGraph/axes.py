@@ -30,13 +30,14 @@ class domain:
                 return self.start % self.step
         else:
             return ph % self.step
+
     @phase.setter
-    def phase(self, v)
+    def phase(self, v):
         self._phase = v
 
     @property
     def sampling_rate(self):
-        if step == None:
+        if self.step == None:
             return None
         return 1/self.step
     @sampling_rate.setter
@@ -48,7 +49,7 @@ class domain:
         
     @property
     def nsamples(self):
-        if step == None:
+        if self.step == None:
             return None
         return (self.stop-self.start)/self.step
     
@@ -78,32 +79,11 @@ class domain:
         if l>0 and l<np.inf and self.step != None:
             ph = self.phase
             if ph == 0:
-                return np.arange(self.start, self.stop, self.step)
+                return np.arange(self.start, self.stop, self.step, dtype=np.intp)
             else:
-                return np.arange(self.start+self.step-self.phase, self.stop, self.step)
+                return np.arange(self.start+self.step-self.phase, self.stop, self.step, dtype=np.intp)
         else:
             return None
-
-class axis_info:
-    unit = cdh.default("")
-    annotations = cdh.default( () )
-    axis_domain = cdh.default( None )
-    index_domain = cdh.default( None )
-    def to_index(self, x):
-        raise NotImplementedError
-    def from_index(self, i):
-        raise NotImplementedError
-    interpolator = cdh.parent_reference_host( cdh.default( interpolator_base() ) ) #TODO: TEST TEST
-
-class identity_axis(axis_info):
-    @property
-    def index_domain(self):
-        return self.axis_domain
-    
-    def to_index(self,x):
-        return x
-    def from_index(self,i):
-        return i
 
 class interpolator_base:
     def find_indexes(self, i):
@@ -129,6 +109,27 @@ class floor_interpolator(interpolator_base):
     
     def interpolate(self, i, ip, vp, axis):
         return vp
+
+class axis_info:
+    unit = cdh.default("")
+    annotations = cdh.default( () )
+    axis_domain = cdh.default( None )
+    index_domain = cdh.default( None )
+    def to_index(self, x):
+        raise NotImplementedError
+    def from_index(self, i):
+        raise NotImplementedError
+    interpolator = cdh.parent_reference_host( cdh.default( interpolator_base() ) ) #TODO: TEST TEST
+
+class identity_axis(axis_info):
+    @property
+    def index_domain(self):
+        return self.axis_domain
+    
+    def to_index(self,x):
+        return x
+    def from_index(self,i):
+        return i
 
 class linear_sampled_axis(axis_info):
     """

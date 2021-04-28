@@ -12,10 +12,11 @@
 # print(f"{wr[:,1].shape=}")
 # print(f"{wr[0:50:5,0].shape=}")
 
-class b:
-    a = 5
+from FilterGraph.ndfield import *
 
-class d(b):
-    b = 9
+a1 = linear_sampled_axis()
+a1.axis_domain = domain(0,10000,2)
+a2 = linear_sampled_axis()
+a2.axis_domain = domain(100,200,0.5)
 
-print(dir(d))
+print(expand_indexes((23,slice(120,150,1)), (a1.index_domain,a2.index_domain)))
