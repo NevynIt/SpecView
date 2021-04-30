@@ -1,9 +1,7 @@
 import class_definition_helpers as cdh
 from .axes import *
 
-EMPTY_SLICE = slice(None)
-
-def expand_indexes(key, domains):
+def expand_slices(key: tuple[any], domains: list[domain]):
     #transform key in specific indexes
     if not isinstance(key, tuple):
         key = (key,)
@@ -21,31 +19,30 @@ def expand_indexes(key, domains):
     for i in range(len(key)):
         k = key[i]
         if isinstance(k, slice):
-            if k == EMPTY_SLICE:
-                ind.append(domains[i].arange())
+            domain_slice = domains[i].slice()
+            if k == EMPTY_SLICE or k == domain_slice:
+                ind.append(domain_slice)
             else:
-                step = k.step or domains[i].step
+                step = k.step or domain_slice.step
                 if step == 0:
                     raise IndexError
                 elif step>0:
-                    start = k.start or domains[i].start
-                    start = max(start, domains[i].start)
-                    stop = k.stop or domains[i].stop
-                    stop = min(stop, domains[i].stop)
+                    start = k.start or domain_slice.start
+                    start = max(start, domain_slice.start)
+                    stop = k.stop or domain_slice.stop
+                    stop = min(stop, domain_slice.stop)
                 else:
-                    start = k.start or domains[i].start
-                    start = max(start, domains[i].start)
-                    stop = k.stop or domains[i].stop
-                    stop = min(stop, domains[i].stop)
+                    start = k.start or domain_slice.start
+                    start = max(start, domain_slice.start)
+                    stop = k.stop or domain_slice.stop
+                    stop = min(stop, domain_slice.stop)
                 n = max(0,(stop-start)/step)
                 if n == np.inf:
                     raise IndexError
-                ind.append(np.arange(start,stop,step,dtype=np.intp))
-        elif isinstance(k, numbers.Number):
-            ind.append(np.asarray(k)) #TODO: not sure here
-        else: #assume it's a ndarray, TODO more checking
+                ind.append(slice(start,stop,step))
+        else: #anything else, keep it as it is
             ind.append(k)
-    return ind
+    return tuple(ind)
 
 class ndfield:
     """
@@ -60,7 +57,7 @@ class ndfield:
         raise NotImplementedError
 
     def samplespace(self, i):
-        "samplespace gets asked for a grid of indexes. i.e.: i is an array of M arrays, with M = len(shape)"
+        "samplespace is indexed with a iterable of slices/indexes/arrays of indexes, one per axis."
         raise NotImplementedError
 
     @property
@@ -112,7 +109,7 @@ class ndfield:
         return tuple([a.from_index(ii) for a, ii in zip(self.axes, i)])
 
     def __getitem__(self, key):
-        ind = expand_indexes(key, [a.index_domain for a in self.axes])
+        ind = expand_slices(key, [a.index_domain for a in self.axes])
         if self.interpolator:
             ip = self.interpolator.find_indexes(ind)
             vp = self.samplespace(ip)
@@ -121,7 +118,7 @@ class ndfield:
             return self.samplespace(ind)
 
     def __array__(self, dtype = None):
-        if all([(a.nsamples != None and a.nsamples < np.inf) for a in self.axes]):
+        if all([a.countable for a in self.axes]):
             if dtype == None:
                 dtype = self.dtype
             return np.array(self[...], dtype=dtype)

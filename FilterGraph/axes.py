@@ -2,6 +2,8 @@ import class_definition_helpers as cdh
 import numbers
 import numpy as np
 
+EMPTY_SLICE = slice(None)
+
 class domain:
     """ start is a valid coordinate, and determines the phase for the sampling """
 
@@ -54,6 +56,11 @@ class domain:
         return (self.stop-self.start)/self.step
     
     @property
+    def countable(self) -> bool:
+        n = self.nsamples
+        return n != None and n < np.inf
+
+    @property
     def lenght(self):
         return self.stop-self.start
     
@@ -84,8 +91,13 @@ class domain:
                 return np.arange(self.start+self.step-self.phase, self.stop, self.step, dtype=np.intp)
         else:
             return None
+    
+    def slice(self):
+        return slice(self.start,self.stop,self.step)
 
 class interpolator_base:
+    "no interpolation"
+
     def find_indexes(self, i):
         "find the indexes required to provide the interpolated value for the indexes in i"
         return i
@@ -103,12 +115,45 @@ class interpolator_base:
         """
         return vp
 
-class floor_interpolator(interpolator_base):
+class floor_interpolator(interpolator_base): #TEST TEST TEST
+    "simple floor interpolator that works for index_domains starting from 0 with step 1"
+
     def find_indexes(self, i):
-        return np.floor(i)
+        if isinstance(i, slice):
+            if i.step > 0:
+                if step % 1 == 0:
+                    return slice(np.floor(i.start), np.floor(i.stop), i.step)
+                else:
+                    return slice(np.floor(i.start), np.ceil(i.stop), 1)
+            elif i.step < 0:
+                if step % 1 == 0:
+                    return slice(np.floor(i.stop), np.floor(i.start), -i.step)
+                else:
+                    return slice(np.floor(i.stop), np.ceil(i.start), 1)
+            else:
+                raise IndexError
+        else:
+            return np.floor(i)
     
-    def interpolate(self, i, ip, vp, axis):
-        return vp
+    def interpolate(self, i, ip, vp: np.ndarray, axis: int):
+        if isinstance(i, slice):
+            if i.step > 0:
+                if step % 1 == 0:
+                    return vp
+                else:
+                    key = [EMPTY_SLICE, ] * len(vp.shape)
+                    key[axis] = np.floor(np.arange(i.start,i.stop,i.step))
+                    return vp[key]
+            elif i.step < 0:
+                if step % 1 == 0:
+                    vp.flip(axis)
+                    return vp
+                else:
+                    key = [EMPTY_SLICE, ] * len(vp.shape)
+                    key[axis] = np.flip(np.floor(np.arange(i.stop,i.start,-i.step)))
+                    return vp[key]
+        else:
+            return vp
 
 class axis_info:
     unit = cdh.default("")
