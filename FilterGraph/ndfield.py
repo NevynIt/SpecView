@@ -86,7 +86,7 @@ class ndfield:
             warnings.warn("not sure this is the right way to do it... maybe numpy will raise...")
             return None
 
-    def expand_key(self, key, constrain_bounds = True, force_ascending = True):
+    def expand_key(self, key, constrain_bounds = True):
         domains = [a.index_domain for a in self.axes]
         #transform key in specific indexes
         if not isinstance(key, tuple):
@@ -112,17 +112,19 @@ class ndfield:
                     step = k.step or domain_slice.step
                     if step == 0:
                         raise IndexError
-                    if force_ascending and step <0:
-                        warnings.warn("I don't think it is correct, boundaries might be wrong")
-                        start = k.stop or domain_slice.start
-                        stop = k.start or domain_slice.stop
-                        step = -step
+                    if step <0:
+                        warnings.warn("maybe incorrect, boundaries might be wrong")
+                        start = k.start or (domain_slice.stop - domain_slice.step)
+                        stop = k.stop or (domain_slice.start - domain_slice.step)
+                        if constrain_bounds:
+                            start = min(start, domain_slice.stop - domain_slice.step)
+                            stop = max(stop, domain_slice.start - domain_slice.step)
                     else:
                         start = k.start or domain_slice.start
                         stop = k.stop or domain_slice.stop
-                    if constrain_bounds:
-                        start = max(start, domain_slice.start)
-                        stop = min(stop, domain_slice.stop)
+                        if constrain_bounds:
+                            start = max(start, domain_slice.start)
+                            stop = min(stop, domain_slice.stop)
                     n = max(0,(stop-start)/step)
                     if n == np.inf:
                         raise IndexError

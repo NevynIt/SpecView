@@ -1,4 +1,5 @@
 from FilterGraph.WavRead import WavReader
+from FilterGraph.scipy_interp import scipy_interpolator
 
 wr = WavReader()
 print(f"{wr[:].shape=}")
@@ -14,4 +15,7 @@ wacky = wr[0:44100:0.32,[0,1,0,1,0,0,0,1,1]]
 pre = wr[-10:10:0.5]
 stop = wr.axes[0].index_domain.stop
 post = wr[stop-10: stop+10: 2, 1]
-pass
+
+wr.axes[0].interpolator = scipy_interpolator()
+lin = wr[0:44100:0.5,[1,0]]
+print(lin-dblrate_swap)
