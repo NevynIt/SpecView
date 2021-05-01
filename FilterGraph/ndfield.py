@@ -1,7 +1,7 @@
 import class_definition_helpers as cdh
 from .axes import *
 
-def expand_slices(key: tuple[any], domains: list[domain]):
+def expand_slices(key, domains):
     #transform key in specific indexes
     if not isinstance(key, tuple):
         key = (key,)
@@ -62,12 +62,12 @@ class ndfield:
 
     @property
     def dtype(self):
-        raise NotImplementedError
+        return np.float_
 
     @property
     def shape(self):
         "default implementation calculates the shape from the axes"
-        return tuple([a.lenght for a in self.axes])
+        return tuple([a.index_domain.nsamples for a in self.axes])
 
     @cdh.autocreate
     class interpolator(interpolator_base):
@@ -77,24 +77,25 @@ class ndfield:
         def find_indexes(self, coords):
             #find all indexes in parallel
             ip = []
-            for i, a in zip(coords,parent.axes):
+            for i, a in zip(coords,self.parent.axes):
                 if a.interpolator:
                     ip.append(a.interpolator.find_indexes(i))
                 else:
                     ip.append(i)
-            return ip
+            return tuple(ip)
         
         def interpolate(self, coords, ip, vp):
             #interpolate starting from the last dimension
             #TODO: TEST TEST TEEEEST
-            for i in range(len(i))[::-1]:
-                a = parent.axes[i]
+            for i in range(len(coords))[::-1]:
+                a = self.parent.axes[i]
                 if a.interpolator:
                     vp = a.interpolator.interpolate(coords[i], ip[i], vp, i)
                 else:
                     pass
             return vp
 
+    @cdh.indexable
     def coordspace(self, x):
         return self[self.to_index(x)]
 
@@ -124,3 +125,11 @@ class ndfield:
             return np.array(self[...], dtype=dtype)
         else:
             return None #not sure this is the right way to do it... maybe numpy will raise...
+
+class fnc_field(ndfield):
+    def fnc(self, grid):
+        return grid.sum(0)
+    
+    @cdh.indexable
+    def samplespace(self, i):
+        return self.fnc(np.mgrid[i])

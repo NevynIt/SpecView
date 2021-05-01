@@ -53,7 +53,7 @@ class domain:
     def nsamples(self):
         if self.step == None:
             return None
-        return (self.stop-self.start)/self.step
+        return int((self.stop-self.start)/self.step)
     
     @property
     def countable(self) -> bool:
@@ -64,26 +64,25 @@ class domain:
     def lenght(self):
         return self.stop-self.start
     
-    def intersect(self, x):
-        if isinstance(x,numbers.Number):
-            if x >= self.start and x<=self.stop:
-                return x
-            else:
-                return None
-        elif isinstance(x, slice):
-            if self.step == None:
-                return slice(np.max(self.start,x.start),np.min(self.stop,x.stop),x.step)
-            elif x.step == None:
-                #adjust the start so that it lands on a valid coordinate iaw self.step
-                raise NotImplementedError
-            else:
-                #TODO: more difficult, we have to consider the phase of the steps and how the steps will interact
-                #rounding considerations apply. shall we only return if the coordinates are valid and exact?
-                raise NotImplementedError
+    # def intersect(self, x):
+    #     if isinstance(x,numbers.Number):
+    #         if x >= self.start and x<=self.stop:
+    #             return x
+    #         else:
+    #             return None
+    #     elif isinstance(x, slice):
+    #         if self.step == None:
+    #             return slice(np.max(self.start,x.start),np.min(self.stop,x.stop),x.step)
+    #         elif x.step == None:
+    #             #adjust the start so that it lands on a valid coordinate iaw self.step
+    #             raise NotImplementedError
+    #         else:
+    #             #TODO: more difficult, we have to consider the phase of the steps and how the steps will interact
+    #             #rounding considerations apply. shall we only return if the coordinates are valid and exact?
+    #             raise NotImplementedError
 
     def arange(self):
-        l = self.lenght
-        if l>0 and l<np.inf and self.step != None:
+        if self.countable:
             ph = self.phase
             if ph == 0:
                 return np.arange(self.start, self.stop, self.step, dtype=np.intp)
@@ -93,6 +92,7 @@ class domain:
             return None
     
     def slice(self):
+        #makes no sense if it is not countable
         return slice(self.start,self.stop,self.step)
 
 class interpolator_base:
@@ -121,36 +121,38 @@ class floor_interpolator(interpolator_base): #TEST TEST TEST
     def find_indexes(self, i):
         if isinstance(i, slice):
             if i.step > 0:
-                if step % 1 == 0:
-                    return slice(np.floor(i.start), np.floor(i.stop), i.step)
+                if i.step % 1 == 0:
+                    return slice(int(np.floor(i.start)), int(np.floor(i.stop)), int(i.step))
                 else:
-                    return slice(np.floor(i.start), np.ceil(i.stop), 1)
+                    return slice(int(np.floor(i.start)), int(np.ceil(i.stop)), 1)
             elif i.step < 0:
-                if step % 1 == 0:
-                    return slice(np.floor(i.stop), np.floor(i.start), -i.step)
+                if i.step % 1 == 0:
+                    return slice(int(np.floor(i.stop)), int(np.floor(i.start)), int(-i.step))
                 else:
-                    return slice(np.floor(i.stop), np.ceil(i.start), 1)
+                    return slice(int(np.floor(i.stop)), int(np.ceil(i.start)), 1)
             else:
                 raise IndexError
+        elif isinstance(i, np.ndarray):
+            return i.astype(np.int_)
         else:
-            return np.floor(i)
+            return int(np.floor(i))
     
     def interpolate(self, i, ip, vp: np.ndarray, axis: int):
         if isinstance(i, slice):
             if i.step > 0:
-                if step % 1 == 0:
+                if i.step % 1 == 0:
                     return vp
                 else:
                     key = [EMPTY_SLICE, ] * len(vp.shape)
-                    key[axis] = np.floor(np.arange(i.start,i.stop,i.step))
+                    key[axis] = np.floor(np.arange(i.start,i.stop,i.step)).astype(np.int_)
                     return vp[key]
             elif i.step < 0:
-                if step % 1 == 0:
+                if i.step % 1 == 0:
                     vp.flip(axis)
                     return vp
                 else:
                     key = [EMPTY_SLICE, ] * len(vp.shape)
-                    key[axis] = np.flip(np.floor(np.arange(i.stop,i.start,-i.step)))
+                    key[axis] = np.flip(np.floor(np.arange(i.stop,i.start,-i.step))).astype(np.int_)
                     return vp[key]
         else:
             return vp

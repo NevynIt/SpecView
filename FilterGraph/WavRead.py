@@ -6,20 +6,6 @@ import itertools
 
 from .ndfield import *
 
-def prockey(key, shape):
-    if isinstance(key,numbers.Integral) or isinstance(key,slice):
-        key = (key,)
-    if not isinstance(key,tuple) or len(key) > len(shape):
-        return None
-    res = []
-    for k, s in itertools.zip_longest(key, shape, fillvalue=slice(None)):
-        if isinstance(k,numbers.Integral):
-           k = slice(k,k+1,1)
-        if not isinstance(k, slice):
-            return None
-        res.append(slice(*k.indices(s)))
-    return res
-
 class WavReader(ndfield):
     props = cdh.property_store()
     filename = props.bindable()
@@ -54,8 +40,6 @@ class WavReader(ndfield):
             return np.int16
         return np.dtype(f"<i{self.params.sampwidth}")
 
-    # shape = props.cached(params, getter=ndfield.shape.getter)
-
     def read(self,pos,frames):
         if frames <= 0:
             return np.zeros( (0, self.shape[1]) )
@@ -66,12 +50,13 @@ class WavReader(ndfield):
             return np.frombuffer(data, f"<i{self.params.sampwidth}").reshape( (frames, self.params.nchannels) )
 
     def samplespace(self, i):
-        i1 = self.axes[0].index_domain.intersect(i)
-        #TODO: continue from here - samplespace gets asked for a grid of indexes. i.e.: i is an array of M arrays, with M = len(shape)
-        
-        raise NotImplementedError
-        newkey  = prockey(key, self.shape)
-        if newkey == None:
-            raise IndexError(f"index {key} is not valid or out of bounds")
-        tmp = self.read(newkey[0].start,newkey[0].stop-newkey[0].start)
-        return tmp[::newkey[0].step,newkey[1]]
+        t, c = i #unpack the tuple
+        if isinstance(t, slice):
+            tmp = self.read(t.start, t.stop-t.start)
+            tmp = tmp[::t.step]
+            tmp = tmp[:,c]
+            return tmp
+        else:
+            tmp = self.read(np.min(t), np.max(t) - np.min(t) + 1)
+            tmp = tmp[t,c]
+            return tmp
