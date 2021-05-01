@@ -144,7 +144,7 @@ class floor_interpolator(interpolator_base): #TEST TEST TEST
                     return vp
                 else:
                     key = [EMPTY_SLICE, ] * len(vp.shape)
-                    key[axis] = np.floor(np.arange(i.start,i.stop,i.step)).astype(np.int_)
+                    key[axis] = np.floor(np.arange(0,i.stop-i.start,i.step)).astype(np.int_)
                     return vp[key]
             elif i.step < 0:
                 if i.step % 1 == 0:
@@ -152,7 +152,7 @@ class floor_interpolator(interpolator_base): #TEST TEST TEST
                     return vp
                 else:
                     key = [EMPTY_SLICE, ] * len(vp.shape)
-                    key[axis] = np.flip(np.floor(np.arange(i.stop,i.start,-i.step))).astype(np.int_)
+                    key[axis] = np.flip(np.floor(np.arange(0,i.start-i.stop,-i.step))).astype(np.int_)
                     return vp[key]
         else:
             return vp
