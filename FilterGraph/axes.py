@@ -98,11 +98,11 @@ class domain:
 class interpolator_base:
     "no interpolation"
 
-    def find_indexes(self, i):
+    def find_indexes(self, indexes):
         "find the indexes required to provide the interpolated value for the indexes in i"
-        return i
+        return indexes
     
-    def interpolate(self, i, ip, vp, axis=None):
+    def interpolate(self, indexes, ip, vp, axis=None):
         """
         vp is n-dimensional, but interpolate needs only to consider the given axis, and return a new n-dim array
         in which based on the values for the coordinates ip (chosen by find_indexes) the values in the coordinates i
@@ -118,42 +118,42 @@ class interpolator_base:
 class floor_interpolator(interpolator_base): #TEST TEST TEST
     "simple floor interpolator that works for index_domains starting from 0 with step 1"
 
-    def find_indexes(self, i):
-        if isinstance(i, slice):
-            if i.step > 0:
-                if i.step % 1 == 0:
-                    return slice(int(np.floor(i.start)), int(np.floor(i.stop)), int(i.step))
+    def find_indexes(self, indexes):
+        if isinstance(indexes, slice):
+            if indexes.step > 0:
+                if indexes.step % 1 == 0:
+                    return slice(int(np.floor(indexes.start)), int(np.floor(indexes.stop)), int(indexes.step))
                 else:
-                    return slice(int(np.floor(i.start)), int(np.ceil(i.stop)), 1)
+                    return slice(int(np.floor(indexes.start)), int(np.ceil(indexes.stop)), 1)
             elif i.step < 0:
                 if i.step % 1 == 0:
-                    return slice(int(np.floor(i.stop)), int(np.floor(i.start)), int(-i.step))
+                    return slice(int(np.floor(indexes.stop)), int(np.floor(indexes.start)), int(-indexes.step))
                 else:
-                    return slice(int(np.floor(i.stop)), int(np.ceil(i.start)), 1)
+                    return slice(int(np.floor(indexes.stop)), int(np.ceil(indexes.start)), 1)
             else:
                 raise IndexError
-        elif isinstance(i, np.ndarray):
-            return i.astype(np.int_)
+        elif isinstance(indexes, np.ndarray):
+            return indexes.astype(np.int_)
         else:
-            return int(np.floor(i))
+            return int(np.floor(indexes))
     
-    def interpolate(self, i, ip, vp: np.ndarray, axis: int):
-        if isinstance(i, slice):
-            if i.step > 0:
-                if i.step % 1 == 0:
+    def interpolate(self, indexes, ip, vp: np.ndarray, axis: int):
+        if isinstance(indexes, slice):
+            if indexes.step > 0:
+                if indexes.step % 1 == 0:
                     return vp
                 else:
                     key = [EMPTY_SLICE, ] * len(vp.shape)
-                    key[axis] = np.floor(np.arange(0,i.stop-i.start,i.step)).astype(np.int_)
-                    return vp[key]
-            elif i.step < 0:
-                if i.step % 1 == 0:
+                    key[axis] = np.floor(np.arange(0,indexes.stop-indexes.start,indexes.step)).astype(np.int_)
+                    return vp[tuple(key)]
+            elif indexes.step < 0:
+                if indexes.step % 1 == 0:
                     vp.flip(axis)
                     return vp
                 else:
                     key = [EMPTY_SLICE, ] * len(vp.shape)
-                    key[axis] = np.flip(np.floor(np.arange(0,i.start-i.stop,-i.step))).astype(np.int_)
-                    return vp[key]
+                    key[axis] = np.flip(np.floor(np.arange(0,indexes.start-indexes.stop,-indexes.step))).astype(np.int_)
+                    return vp[tuple(key)]
         else:
             return vp
 
@@ -162,21 +162,23 @@ class axis_info:
     annotations = cdh.default( () )
     axis_domain = cdh.default( None )
     index_domain = cdh.default( None )
-    def to_index(self, x):
+    def to_index(self, coords):
         raise NotImplementedError
-    def from_index(self, i):
+    def from_index(self, indexes):
         raise NotImplementedError
     interpolator = cdh.parent_reference_host( cdh.default( interpolator_base() ) ) #TODO: TEST TEST
+    #filler options are: "zeros", "nearest", "reflect", "mirror", "wrap", or a specific value
+    filler = cdh.default("zeros")
 
 class identity_axis(axis_info):
     @property
     def index_domain(self):
         return self.axis_domain
     
-    def to_index(self,x):
-        return x
-    def from_index(self,i):
-        return i
+    def to_index(self,coords):
+        return coords
+    def from_index(self,indexes):
+        return indexes
 
 class linear_sampled_axis(axis_info):
     """
@@ -194,11 +196,11 @@ class linear_sampled_axis(axis_info):
         # assert self.axis_domain.nsamples == None or self.axis_domain.nsamples == np.inf, "axis_domain is not sampled nor discrete or not bounded"
         return domain(0, self.axis_domain.nsamples, 1)
 
-    def __to_index_impl(self,x):
+    def __to_index_impl(self,coords):
         # assert self.axis_domain == None, "axis_domain is None"
         # assert self.axis_domain.step, "axis_domain is not sampled nor discrete"
         # assert self.axis_domain.start > -np.inf, "axis_domain is not bounded"
-        return (x - self.axis_domain.start)/self.axis_domain.step
+        return (coords - self.axis_domain.start)/self.axis_domain.step
 
     def to_index(self, x):
         if isinstance(x, slice):
@@ -208,12 +210,12 @@ class linear_sampled_axis(axis_info):
             #this works for scalars or ndarrays of indexes
             return self.__to_index_impl(x)
 
-    def __from_index_impl(self,i):
-        return self.axis_domain.start + (i*self.axis_domain.step)
+    def __from_index_impl(self,indexes):
+        return self.axis_domain.start + (indexes*self.axis_domain.step)
 
-    def from_index(self, i):
-        if isinstance(x, slice):
-            i1 = slice(x.start or self.index_domain.start, x.stop or self.index_domain.stop, x.step or self.index_domain.step)
+    def from_index(self, indexes):
+        if isinstance(indexes, slice):
+            i1 = slice(indexes.start or self.index_domain.start, indexes.stop or self.index_domain.stop, indexes.step or self.index_domain.step)
             return slice(self.__from_index_impl(i1.start), self.__from_index_impl(i1.stop), i1.step*self.axis_domain.step)
         else:
-            return self.__from_index_impl(i)
+            return self.__from_index_impl(indexes)

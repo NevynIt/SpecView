@@ -22,31 +22,35 @@ class scipy_interpolator(interpolator_base):
                 4:4
             }
 
-    def find_indexes(self, i):
-        if isinstance(i, numbers.Number):
-            a = np.array( (i,) )
-        elif isinstance(i, np.ndarray):
-            a = i
-        elif isinstance(i, slice):
-            a = np.arange(i.start,i.stop,i.step)
+    def find_indexes(self, indexes):
+        if isinstance(indexes, numbers.Number):
+            a = np.array( (indexes,) )
+        elif isinstance(indexes, np.ndarray):
+            a = indexes
+        elif isinstance(indexes, slice):
+            a = np.arange(indexes.start,indexes.stop,indexes.step)
         else:
             raise NotImplementedError
-        af = np.floor(a)
-        ac = np.ceil(a)
+        selector = (a % 1) == 0
+        constantset = a[selector]
+        interpset = a[~selector]
+
+        af = np.floor(interpset)
+        ac = np.ceil(interpset)
         tmp = []
         for j in range(scipy_interpolator.order[self.kind]):
             tmp.append(af - j)
             tmp.append(ac + j)
-        tmp = np.concatenate(tmp)
-        return np.union1d(tmp,np.array(())).astype(np.int_)
+        interpset = np.concatenate(tmp)
+        return np.union1d(constantset, interpset).astype(np.int_)
 
-    def interpolate(self, i, ip, vp, axis):
-        if isinstance(i, numbers.Number):
-            a = np.array( (i,) )
-        elif isinstance(i, np.ndarray):
-            a = i
-        elif isinstance(i, slice):
-            a = np.arange(i.start,i.stop,i.step)
+    def interpolate(self, indexes, ip, vp, axis):
+        if isinstance(indexes, numbers.Number):
+            a = np.array( (indexes,) )
+        elif isinstance(indexes, np.ndarray):
+            a = indexes
+        elif isinstance(indexes, slice):
+            a = np.arange(indexes.start,indexes.stop,indexes.step)
         else:
             raise NotImplementedError
         f = scipy.interpolate.interp1d(ip,vp,axis=axis,kind=self.kind)
