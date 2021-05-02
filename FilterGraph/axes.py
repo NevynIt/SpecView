@@ -24,7 +24,7 @@ class domain:
     def phase(self):
         if self.step == None:
             return None
-        ph = getattr(self, "_step", None)
+        ph = getattr(self, "_phase", None)
         if ph==None:
             if self.start == -np.inf:
                 return 0

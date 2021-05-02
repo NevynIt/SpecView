@@ -49,8 +49,8 @@ class WavReader(ndfield):
             data = w.readframes(frames)
             return np.frombuffer(data, f"<i{self.params.sampwidth}").reshape( (frames, self.params.nchannels) )
 
-    def expand_key(self, key):
-        return ndfield.expand_key(self, key, constrain_bounds=False)
+    def expand_indexes(self, key):
+        return ndfield.expand_indexes(self, key, constrain_bounds=False)
 
     def samplespace(self, i):
         t, c = i #unpack the tuple

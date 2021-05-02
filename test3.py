@@ -1,5 +1,6 @@
 from FilterGraph.WavRead import WavReader
 from FilterGraph.scipy_interp import scipy_interpolator
+import numpy as np
 
 wr = WavReader()
 print(f"{wr[:].shape=}")
@@ -19,3 +20,6 @@ post = wr[stop-10: stop+10: 2, 1]
 wr.axes[0].interpolator = scipy_interpolator()
 lin = wr[0:44100:0.5,[1,0]]
 print(lin-dblrate_swap)
+
+fft = np.fft.rfft(lin,axis=0)
+print(fft)

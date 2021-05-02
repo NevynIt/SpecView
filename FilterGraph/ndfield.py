@@ -47,7 +47,7 @@ class ndfield:
         def interpolate(self, indexes, ip, vp):
             "interpolate starting from the last dimension"
             for i in range(len(indexes))[::-1]:
-                self.parent.axes[i].interpolator.interpolate(indexes[i], ip[i], vp, i)
+                vp = self.parent.axes[i].interpolator.interpolate(indexes[i], ip[i], vp, i)
             return vp
 
     @cdh.indexable
@@ -77,7 +77,7 @@ class ndfield:
         #iterate all the combinations equivalent to the subspaces that are inside/outside one or more axes
         #call samplespace for the single one inside, if any. (sliceA,sliceB2,ndarrayC2) in the example above
         #call outerspace for the ones outside (all the others)
-        vp = self.samplespace(ip)
+        vp = self.samplespace(indexes)
         #recombine the pieces into a single ndarray (using numpy.blocks), based on how things had been cut
         #      single scalar indexes are easy, the bit with the scalar is the only thing used
         #      slices are slightly more complicated, as up to three pieces could be collated
@@ -155,11 +155,14 @@ class ndfield:
                     ind.append(slice(start,stop,step))
             elif isinstance(k, numbers.Number):
                     ind.append(k)
-            elif isinstance(k, np.ndarray):
-                if k.dtype == np.int_:
+            else:
+                k = np.asanyarray(k)
+                if issubclass(k.dtype.type, numbers.Integral):
                     ind.append(k)
                 elif k.dtype == np.bool_:
                     raise NotImplementedError
+                else:
+                    raise IndexError
         return tuple(ind)
 
 # class fnc_field(ndfield):
