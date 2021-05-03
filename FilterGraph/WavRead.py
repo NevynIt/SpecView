@@ -27,7 +27,7 @@ class WavReader(ndfield):
         params = self.params
         if params == None:
             params = wave._wave_params(1,1,1,0,"NONE","")
-        time = linear_sampled_axis()
+        time = sampled_axis()
         time.unit = "s"
         time.axis_domain = domain(0, params.nframes/params.framerate, 1/params.framerate)
         channels = identity_axis()

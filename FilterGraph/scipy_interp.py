@@ -1,7 +1,7 @@
 from .axes import *
 import scipy.interpolate
 
-class scipy_interpolator(interpolator_base):
+class interpolated_axis(sampled_axis):
     "uses scipy.interpolate.interp1d, assumes a discrete field with index_domain starting with step 1 and phase 0"
     
     kind = cdh.default("linear")
@@ -22,7 +22,8 @@ class scipy_interpolator(interpolator_base):
                 4:4
             }
 
-    def find_indexes(self, indexes):
+    def to_samples(self, indexes):
+        #TODO: avoid interpolation if not required
         if isinstance(indexes, numbers.Number):
             a = np.array( (indexes,) )
         elif isinstance(indexes, np.ndarray):
