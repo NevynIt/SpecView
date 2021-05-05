@@ -96,26 +96,61 @@ class domain:
         #makes no sense if it is not countable
         return slice(self.start,self.stop,self.step)
 
+class axis_interpolator:
+    props = cdh.property_store()
+    
+    def __init__(self, axis):
+        self.axis = axis
+        
+    desired_indexes = props.reactive()
+
+    interp_mode = props.reactive( "floor" )
+    @props.cached(desired_indexes, interp_mode)
+    def interpolation_indexes(self):
+        "return indexes that are aligned with the phase and step of axis.index_domain"
+        #transform anything to a ndarray of indexes first
+        raise NotImplementedError
+     
+    fill_mode = props.reactive( "zeros" )
+    @props.cached(interpolation_indexes, fill_mode)
+    def bounded_indexes(self):
+        #transform anything to a ndarray of indexes first
+        #trasform each index individually
+        #use np.unique(inverse = True) to get unique and sorted points, store the reconstruction array
+        "return indexes that are aligned with the boundaries of axis.index_domain"
+        raise NotImplementedError
+
+    #alias
+    required_indexes = bounded_indexes
+        
+    required_values = props.reactive()
+   
+    @props.cached(required_values, fill_mode, bounded_indexes, interpolation_indexes)
+    def unbounded_values(self):
+        "return values for all the interpolation_indexes"
+        #use the reconstruction array to get the unbounded values
+        raise NotImplementedError
+
+    @props.cached(unbounded_values, interp_mode, interpolation_indexes, desired_indexes)
+    def interpolated_values(self):
+        "return values for all the desired_indexes"
+        #use the unbounded values to reconstruct the interpolated values
+        raise NotImplementedError
+   
+    #alias
+    desired_values = interpolated_values
+
 class axis_info:
     unit = cdh.default("")
     annotations = cdh.default( () )
-    axis_domain = cdh.default( domain(0,0,1) )
+    axis_domain = cdh.default()
+    index_domain = cdh.default()
+    pos = cdh.default() #position within the field axes array
+
     @property
-    def index_domain(self):
-        return self.axis_domain
-    
-    def to_index(self, coords):
-        return coords
-    
-    def from_index(self, indexes):
-        return indexes
-    
-    def to_samples(self, indexes):
-        "a perfect implementation should transform the indexes so that they are all valid sample keys, in ascending order"
-        return (indexes, indexes)
-    
-    def interpolate(self, indexes, samples, values, axis):
-        return values
+    def interpolator(self):
+        "get a thread specific interpolator object"
+        return axis_interpolator(self)
 
 #define an alias
 identity_axis = axis_info
@@ -129,6 +164,8 @@ class sampled_axis(axis_info):
     props = cdh.property_store()
     axis_domain = props.reactive( domain(0,0,1) )
 
+
+    #TODO: replace using axis_interpolator
     @props.cached(axis_domain)
     def index_domain(self):
         # assert self.axis_domain == None, "axis_domain is None"
