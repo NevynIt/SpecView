@@ -5,6 +5,28 @@ import warnings
 import itertools
 from .axes import *
 
+        
+class field_interpolator:
+    props = cdh.property_store()
+    
+    def __init__(self, axes):
+        self.axes_interp = [a.interpolator for a in axes]
+        
+    axes_interp = props.reactive()
+    desired_indexes = props.reactive()
+
+    @props.cached(desired_indexes, axes_interp)
+    def required_indexes(self):
+        "collect the required indexes from each axis in order (which also prepares the interpolators)"
+        raise NotImplementedError
+        
+    required_values = props.reactive()
+   
+    @props.cached(required_values, axes_interp, required_indexes)
+    def desired_values(self):
+        "ask each axis in order to perform the interpolation"
+        raise NotImplementedError
+
 class ndfield:
     """
     N-Dimensional field, mapping the coordinates in a space to either scalars, vectors or objects
@@ -35,7 +57,7 @@ class ndfield:
         if not isinstance(key, tuple):
             key = (key,)
         if key.count(np.newaxis) > 0:
-            raise NotImplementedError()("np.newaxis is not supported yet")
+            raise NotImplementedError("np.newaxis is not supported yet")
         if len(key) > n:
             raise IndexError
         el = key.count(...)
@@ -47,6 +69,11 @@ class ndfield:
         else:
             return key + (EMPTY_SLICE, ) * (n - len(key))
 
+    @property
+    def interpolator(self):
+        "get a thread specific interpolator object"
+        return axis_interpolator(self.axes)
+
     @cdh.indexable
     def coordspace(self, coords):
         return self.indexspace[self.to_indexes(coords)]
@@ -56,16 +83,24 @@ class ndfield:
     
     def from_indexes(self, indexes):
         return tuple([a.from_index(i) for a, i in zip(self.axes, self.expand_ellipsis(indexes))])
-
+    
+    #TODO: use the new interpolator class
     @cdh.indexable
     def indexspace(self, indexes):
-        ind = self.expand_ellipsis(indexes)
-        ind, samples = self.to_samples(ind)
-        #TODO: process the sub-sample-spaces from blocks one by one
-        #use itertools.product
-        values = self.samplespace(samples)
-        #combine the blocks in a values matrix
-        return self.interpolate(ind, samples, values)
+        interp = self.interpolator
+        interp.desired_indexes = indexes
+        interp.required_values = self.samplespace(interp.required_indexes)
+        return interp.desired_values
+
+    # @cdh.indexable
+    # def indexspace(self, indexes):
+    #     ind = self.expand_ellipsis(indexes)
+    #     ind, samples = self.to_samples(ind)
+    #     #TODO: process the sub-sample-spaces from blocks one by one
+    #     #use itertools.product
+    #     values = self.samplespace(samples)
+    #     #combine the blocks in a values matrix
+    #     return self.interpolate(ind, samples, values)
 
     def to_samples(self, indexes):
         samples = []
