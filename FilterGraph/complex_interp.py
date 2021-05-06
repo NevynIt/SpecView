@@ -1,6 +1,8 @@
 from .axes import *
 import scipy.interpolate
 
+#TODO: detect and optimise for obvious cases
+
 class complex_axis_interpolator(base_axis_interpolator):
     props = cdh.property_store()
     
@@ -39,11 +41,6 @@ class complex_axis_interpolator(base_axis_interpolator):
                 stop = indexes.stop or (domain.start - domain.step)
             return np.arange(start,stop,step)
 
-    def interpolate(self, space, indexes):
-        self.desired_indexes = self.to_index_array(indexes)
-        self.required_values = space[self.required_indexes]
-        return self.desired_values
-
     interp_mode = props.reactive( "floor" )
     #possible values are those in interp_order, plus floor, ceil, round or throw
 
@@ -66,7 +63,7 @@ class complex_axis_interpolator(base_axis_interpolator):
     @props.cached(desired_indexes, interp_mode)
     def interpolation_indexes(self):
         "return indexes that are aligned with the phase and step of axis.index_domain - limited to whole numbers for now"
-        di = self.desired_indexes
+        di = self.to_index_array(self.desired_indexes)
         im = self.interp_mode
         if im == "floor":
             return np.floor(di).astype(np.int_)
@@ -104,7 +101,7 @@ class complex_axis_interpolator(base_axis_interpolator):
         domain = self.axis.index_domain    
         if fm == "zeros":
             self.selector = (ii >= domain.start) & (ii < domain.stop)
-            selected = ii[selector]
+            selected = ii[self.selector]
         elif fm == "reflect":
             selected = ii.copy()
             swapped = True
@@ -139,10 +136,12 @@ class complex_axis_interpolator(base_axis_interpolator):
     def unbounded_values(self):
         "return values for all the interpolation_indexes"
         #use the reconstruction array to get the unbounded values
-        res = np.take_along_axis(self.required_values, self.inverse, self.pos)
+        res = self.required_values
+        if len(res) > 0:
+            res = np.take(res, self.inverse, self.pos)
         if self.fill_mode == "zeros":
             tmpshape = list(self.required_values.shape)
-            tmpshape[pos] = len(self.interpolation_indexes)
+            tmpshape[self.pos] = len(self.interpolation_indexes) #FIXME: does not work with scalars
             tmp = np.zeros(tmpshape, self.required_values.dtype)
             tmp[self.selector] = res
             res = tmp
@@ -152,13 +151,13 @@ class complex_axis_interpolator(base_axis_interpolator):
     def interpolated_values(self):
         "return values for all the desired_indexes"
         #use the unbounded values to reconstruct the interpolated values
-        di = self.desired_indexes
-        uv = self.unbounded_values
-        ii = self.interpolation_indexes
         im = self.interp_mode
+        uv = self.unbounded_values
         if im in ("floor", "ceil", "round"):
             return uv
         elif im in complex_axis_interpolator.interp_order:
+            di = self.to_index_array(self.desired_indexes)
+            ii = self.interpolation_indexes
             f = scipy.interpolate.interp1d(ii,uv,axis=self.pos,kind=im)
             return f(di)
         else:
@@ -173,7 +172,7 @@ class complex_field_interpolator:
     axes_interp = props.reactive()
 
     def __init__(self, axes):
-        self.axes_interp = [a.get_interpolator(a, i) for i, a in enumerate(axes)]
+        self.axes_interp = [a.get_interpolator(i) for i, a in enumerate(axes)]
 
     def interpolate(self, space, indexes):
         self.desired_indexes = indexes

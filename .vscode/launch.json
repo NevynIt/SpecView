@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/test3.py",
             "console": "integratedTerminal",
-            "justMyCode": false
+            "justMyCode": true
         },
         {
             "name": "Python: Current File",

@@ -5,13 +5,14 @@ import wave, numbers
 import itertools
 
 from .ndfield import *
-from .scipy_interp import *
+from .complex_interp import complex_field_interpolator
+from .sampled_axis import sampled_axis
 
 class WavReader(ndfield):
     props = cdh.property_store()
     filename = props.bindable()
     interpolator = cdh.default( complex_field_interpolator )
-    block_size = cdh.default(2048)
+    block_size = cdh.default(15*1024*1024)
 
     @props.cached(filename)
     def params(self):
@@ -43,24 +44,27 @@ class WavReader(ndfield):
             return np.int16
         return np.dtype(f"<i{self.params.sampwidth}")
 
+    @cdh.indexable
     def samplespace(self, i):
         t, c = i #unpack the tuple
         #t is a set of unique and sorted indexes, as provided by complex_interp
         nframes = self.shape[0]
         nchannels = self.shape[1]
         
-        res = np.zeros( (0,2), dtype = self.dtype)
+        res = np.zeros( (0,nchannels), dtype = self.dtype)
         if len(t)==0:
             return res
 
         bs = self.block_size
         with wave.open(self.filename, "r") as w:
+            pos = 0
             while len(t) > 0:
-                pos = t[0]
-                t -= pos
-                frames = min(bs, np.max(t)) + 1
+                pos += t[0]
+                t -= t[0]
+                frames = max(t[t<bs])+1
+                t = t[t>=frames]
                 w.setpos(pos)
                 data = w.readframes(frames)
                 data = np.frombuffer(data, f"<i{self.params.sampwidth}").reshape( (frames, self.params.nchannels) )
-                res = np.concatenate(res, data)
+                res = np.concatenate( (res, data) )
         return res[:,c]
