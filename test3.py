@@ -17,9 +17,6 @@ pre = wr[-10:10:0.5]
 stop = wr.axes[0].index_domain.stop
 post = wr[stop-10: stop+10: 2, 1]
 
-wr.axes[0].interpolator = scipy_interpolator()
+wr.axes[0].interp_mode = "linear"
 lin = wr[0:44100:0.5,[1,0]]
 print(lin-dblrate_swap)
-
-fft = np.fft.rfft(lin,axis=0)
-print(fft)
