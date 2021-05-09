@@ -177,6 +177,9 @@ class complex_field_interpolator:
     def interpolate(self, space, indexes):
         self.desired_indexes = indexes
         self.required_values = space[self.required_indexes]
+        scalars = [isinstance(di, numbers.Number) for di in indexes]
+        if any(scalars):
+            self.required_values = np.squeeze(self.required_values, np.arange(len(indexes))[scalars])
         return self.desired_values
 
     desired_indexes = props.reactive()
@@ -186,6 +189,8 @@ class complex_field_interpolator:
         "collect the required indexes from each axis in order (which also prepares the interpolators)"
         res = []
         for ai,di in zip(self.axes_interp, self.desired_indexes):
+            if isinstance(di, numbers.Number):
+                di = np.array([di])
             ai.desired_indexes = di
             res.append(ai.required_indexes)
         return tuple(res)
