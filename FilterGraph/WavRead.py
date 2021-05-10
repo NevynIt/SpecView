@@ -52,6 +52,7 @@ class WavReader(ndfield):
         nframes = self.shape[0]
         nchannels = self.shape[1]
         if isinstance(t, slice):
+            #FIXME: optimise this code, use the fact we are working with a slice! Moreover, it does not work for step < 0
             step = t.step or 1
             if step != 1:
                 raise IndexError("WavReader does not support direct resampling, consider using an interpolator")
