@@ -141,7 +141,7 @@ class axis_info:
     sampler = cdh.default( None )
 
     def get_sampler(self, pos):
-        if sampler == None:
+        if self.sampler == None:
             return base_axis_sampler(self, pos)
         elif issubclass(self.sampler, base_axis_sampler):
             return self.sampler(self, pos)

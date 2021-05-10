@@ -33,7 +33,7 @@ class axis_interpolator(base_axis_sampler):
         elif hasattr(axis, "interp_mode"):
             self.interp_mode = axis.interp_mode
 
-    interp_mode = props.reactive( "floor" )
+    interp_mode = cdh.default( "floor" )
     #possible values are those in interp_order, plus floor, ceil, round or throw
 
     interp_order = {
@@ -105,7 +105,7 @@ class axis_extender(base_axis_sampler):
         elif hasattr(axis, "fill_mode"):
             self.fill_mode = axis.fill_mode    
 
-    fill_mode = props.reactive( "zeros" )
+    fill_mode = cdh.default( "zeros" )
     #possible values are zeros, reflect, nearest, repeat
 
     def identify_indexes(self, di):

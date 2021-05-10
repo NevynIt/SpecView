@@ -5,13 +5,11 @@ import wave, numbers
 import itertools
 
 from .ndfield import *
-from .complex_interp import complex_field_sampler
 from .sampled_axis import sampled_axis
 
 class WavReader(ndfield):
     props = cdh.property_store()
     filename = props.bindable()
-    sampler = cdh.default( complex_field_sampler )
     block_size = cdh.default(15*1024*1024)
 
     @props.cached(filename)
@@ -49,6 +47,7 @@ class WavReader(ndfield):
     @cdh.indexable
     def samplespace(self, i):
         t, c = i #unpack the tuple
+        #FIXME: need to work with all possible indexes, tuples, ndarrays or scalars, it should be possible to take it from a old version
         #t is a set of unique and sorted indexes, as provided by complex_interp
         nframes = self.shape[0]
         nchannels = self.shape[1]
