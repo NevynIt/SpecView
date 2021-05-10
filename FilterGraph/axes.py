@@ -97,14 +97,14 @@ class domain:
         return slice(self.start,self.stop,self.step)
 
 class base_axis_interpolator:
-    props = cdh.property_store()
     def __init__(self, axis, pos):
         pass
 
-    desired_indexes = props.observable()
-    required_indexes = desired_indexes
-    required_values = props.observable()
-    desired_values = required_values
+    def identify_indexes(self, di):
+        return di
+
+    def interpolate(self, rv):
+        return rv
 
 class axis_info:
     unit = cdh.default("")

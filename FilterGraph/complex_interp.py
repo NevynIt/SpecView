@@ -21,7 +21,15 @@ class complex_axis_interpolator(base_axis_interpolator):
             self.fill_mode = fill_mode
         elif hasattr(axis, "fill_mode"):
             self.fill_mode = axis.fill_mode
-        
+
+    def identify_indexes(self, di):
+        self.desired_indexes = di
+        return self.required_indexes
+
+    def interpolate(self, rv):
+        self.required_values = rv
+        return self.desired_values        
+
     desired_indexes = props.reactive()
 
     def to_index_array(self, indexes):
@@ -191,8 +199,7 @@ class complex_field_interpolator:
         for ai,di in zip(self.axes_interp, self.desired_indexes):
             if isinstance(di, numbers.Number):
                 di = np.array([di])
-            ai.desired_indexes = di
-            res.append(ai.required_indexes)
+            res.append(ai.identify_indexes(di))
         return tuple(res)
         
     required_values = props.reactive()
@@ -202,6 +209,5 @@ class complex_field_interpolator:
         "ask each axis in order to perform the interpolation"
         rv = self.required_values
         for i, ai in enumerate(self.axes_interp):
-            ai.required_values = rv
-            rv = ai.desired_values
+            rv = ai.interpolate(rv)
         return rv
