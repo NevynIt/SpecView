@@ -5,13 +5,13 @@ import wave, numbers
 import itertools
 
 from .ndfield import *
-from .complex_interp import complex_field_interpolator
+from .complex_interp import complex_field_sampler
 from .sampled_axis import sampled_axis
 
 class WavReader(ndfield):
     props = cdh.property_store()
     filename = props.bindable()
-    interpolator = cdh.default( complex_field_interpolator )
+    sampler = cdh.default( complex_field_sampler )
     block_size = cdh.default(15*1024*1024)
 
     @props.cached(filename)
@@ -34,6 +34,8 @@ class WavReader(ndfield):
         time = sampled_axis()
         time.unit = "s"
         time.axis_domain = domain(0, params.nframes/params.framerate, 1/params.framerate)
+        time.fill_mode = "zeros"
+
         channels = identity_axis()
         channels.axis_domain = domain(0,params.nchannels,1)
         return (time, channels)

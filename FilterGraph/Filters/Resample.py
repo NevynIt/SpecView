@@ -57,8 +57,8 @@ class Resample(Filter):
         if self.p_method == Resample.Methods.SCIPY_INTERP:
             x = np.mgrid[0: 1: 1/frames]
             xp = np.mgrid[0: 1: 1/src.p_frames]
-            interpolator = scipy.interpolate.interp1d(xp, src.p_data, axis = 1, copy = False, kind=self.p_interp_kind)
-            tmp.p_data = interpolator(x)
+            sampler = scipy.interpolate.interp1d(xp, src.p_data, axis = 1, copy = False, kind=self.p_interp_kind)
+            tmp.p_data = sampler(x)
         
         elif self.p_method == Resample.Methods.SCIPY_RESAMPLE:
             tmp.p_data = scipy.signal.resample(src.p_data,frames,axis=1)

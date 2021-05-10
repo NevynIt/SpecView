@@ -8,9 +8,6 @@ class sampled_axis(axis_info):
 
     props = cdh.property_store()
     axis_domain = props.reactive( )
-    interpolator = cdh.default( complex_axis_interpolator )
-    interp_mode = cdh.default("floor")
-    fill_mode = cdh.default("zeros")
 
     @props.cached(axis_domain)
     def index_domain(self):

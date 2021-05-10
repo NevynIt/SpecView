@@ -96,20 +96,37 @@ class domain:
         #makes no sense if it is not countable
         return slice(self.start,self.stop,self.step)
 
-class base_axis_interpolator:
+class base_axis_sampler:
     def __init__(self, axis, pos):
         pass
 
     def identify_indexes(self, di):
         return di
 
-    def interpolate(self, rv):
+    def calculate_values(self, rv):
+        return rv
+
+class combined_axis_sampler(base_axis_sampler):
+    def __init__(self, samplers, axis, pos):
+        self.chain = tuple([s(axis,pos) for s in samplers])
+    
+    def identify_indexes(self, di):
+        for s in self.chain:
+            di = s.identify_indexes(di)
+        return di
+    
+    def calculate_values(self, rv):
+        for s in reversed(self.chain):
+            rv = s.calculate_values(rv)
         return rv
 
 class axis_info:
     unit = cdh.default("")
     annotations = cdh.default( () )
     axis_domain = cdh.default()
+    interp_mode = cdh.default( "throw" )
+    fill_mode = cdh.default( "throw" )
+    page_size = cdh.default( None )
 
     @property
     def index_domain(self):
@@ -121,10 +138,15 @@ class axis_info:
     def from_index(self, indexes):
         return indexes
 
-    interpolator = cdh.default( base_axis_interpolator )
+    sampler = cdh.default( None )
 
-    def get_interpolator(self, pos):
-        return self.interpolator(self, pos)
+    def get_sampler(self, pos):
+        if sampler == None:
+            return base_axis_sampler(self, pos)
+        elif issubclass(self.sampler, base_axis_sampler):
+            return self.sampler(self, pos)
+        elif isinstance(self.sampler, (tuple, list)):
+            return combined_axis_sampler(self.sampler, self, pos)
 
 #define an alias
 identity_axis = axis_info

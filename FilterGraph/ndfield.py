@@ -5,13 +5,67 @@ import warnings
 import itertools
 from .axes import *
 
-class base_field_interpolator:
-    props = cdh.property_store()
-    def __init__(self, field):
-        pass
+class base_field_sampler:
+    def __init__(self, axes):
+        self.axes = axes
+        self.axes_interp = [a.get_sampler(i) for i, a in enumerate(axes)]
 
-    def interpolate(self, space, indexes):
+    def identify_indexes(self, indexes):
+        "collect the required indexes from each axis in order (which also prepares the samplers)"
+        required_indexes = []
+        for ai,di in zip(self.axes_interp, indexes):
+            if isinstance(di, numbers.Number):
+                #wrap the scalar indexes, this is needed to make sure samplers work on the right axis
+                di = np.array([di])
+            required_indexes.append(ai.identify_indexes(di))
+        return tuple(required_indexes)
+
+    def sample(self, space, indexes):
         return space[indexes]
+
+    def calculate_values(self, values):
+        #ask each axis in order to perform the interpolation
+        for i, ai in enumerate(self.axes_interp):
+            values = ai.calculate_values(values)
+
+        #squeeze the axes where the index was a scalar
+        scalars = [isinstance(di, numbers.Number) for di in indexes]
+        if any(scalars):
+            values = np.squeeze(values, np.arange(len(indexes))[scalars])
+        
+        return values
+    
+    def interpolate(self, space, indexes):
+        if all([isinstance(i, base_axis_sampler) for i in self.axes_interp]):
+            return self.sample(space, indexes)
+
+        #identify the required indexes
+        required_indexes = self.identify_indexes(indexes)
+
+        #sample the space
+        values = self.sample(space, indexes)
+
+        return self.calculate_values(values)
+
+class combined_field_sampler(base_axis_sampler):
+    def __init__(self, samplers, axes):
+        self.chain = []
+        self.axes = axes
+        for s in samplers:
+            inst = s(self.axes)
+            self.chain.append(inst)
+            self.axes = inst.axes
+        self.chain = tuple(self.chain)
+    
+    def identify_indexes(self, di):
+        for s in self.chain:
+            di = s.identify_indexes(di)
+        return di
+    
+    def calculate_values(self, rv):
+        for s in reversed(self.chain):
+            rv = s.calculate_values(rv)
+        return rv
 
 class ndfield:
     """
@@ -38,10 +92,10 @@ class ndfield:
         "default implementation calculates the shape from the axes"
         return tuple([a.index_domain.nsamples for a in self.axes])
 
-    interpolator = cdh.default( base_field_interpolator )
+    sampler = cdh.default( base_field_sampler )
 
-    def get_interpolator(self):
-        return self.interpolator(self.axes)
+    def get_sampler(self):
+        return self.sampler(self.axes)
 
     @cdh.indexable
     def coordspace(self, coords):
@@ -72,7 +126,7 @@ class ndfield:
     
     @cdh.indexable
     def indexspace(self, indexes):
-        return self.get_interpolator().interpolate(self.samplespace, self.expand_ellipsis(indexes))
+        return self.get_sampler().interpolate(self.samplespace, self.expand_ellipsis(indexes))
 
     def __getitem__(self, indexes):
         return self.indexspace(indexes)
