@@ -143,7 +143,7 @@ class axis_info:
     def get_sampler(self, pos):
         if self.sampler == None:
             return base_axis_sampler(self, pos)
-        elif issubclass(self.sampler, base_axis_sampler):
+        elif isinstance(self.sampler, type) and issubclass(self.sampler, base_axis_sampler):
             return self.sampler(self, pos)
         elif isinstance(self.sampler, (tuple, list)):
             return combined_axis_sampler(self.sampler, self, pos)

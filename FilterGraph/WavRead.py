@@ -47,25 +47,43 @@ class WavReader(ndfield):
     @cdh.indexable
     def samplespace(self, i):
         t, c = i #unpack the tuple
-        #FIXME: need to work with all possible indexes, tuples, ndarrays or scalars, it should be possible to take it from a old version
+
         #t is a set of unique and sorted indexes, as provided by complex_interp
         nframes = self.shape[0]
         nchannels = self.shape[1]
+        if isinstance(t, slice):
+            step = t.step or 1
+            if step != 1:
+                raise IndexError("WavReader does not support direct resampling, consider using an interpolator")
+            if step > 0:
+                start = t.start or 0
+                stop = t.stop or nframes
+            elif step < 0:
+                warnings.warn("maybe incorrect, boundaries might be wrong")
+                start = t.start or (nframes - 1)
+                stop = t.stop or (0 - 1)
+            t = np.arange(start,stop,step)
+        elif isinstance(t, numbers.Number):
+            t = np.array(t)
         
-        res = np.zeros( (0,nchannels), dtype = self.dtype)
-        if len(t)==0:
-            return res
+        if isinstance(t, np.ndarray):
+            res = np.zeros( (0,nchannels), dtype = self.dtype)
+            if len(t)==0:
+                return res
+            t = t.astype(np.int_)
 
-        bs = self.block_size
-        with wave.open(self.filename, "r") as w:
-            pos = 0
-            while len(t) > 0:
-                pos += t[0]
-                t -= t[0]
-                frames = max(t[t<bs])+1
-                t = t[t>=frames]
-                w.setpos(pos)
-                data = w.readframes(frames)
-                data = np.frombuffer(data, f"<i{self.params.sampwidth}").reshape( (frames, self.params.nchannels) )
-                res = np.concatenate( (res, data) )
-        return res[:,c]
+            bs = self.block_size
+            with wave.open(self.filename, "r") as w:
+                pos = 0
+                while len(t) > 0:
+                    pos += t[0]
+                    t -= t[0]
+                    frames = max(t[t<bs])+1
+                    t = t[t>=frames]
+                    w.setpos(pos)
+                    data = w.readframes(frames)
+                    data = np.frombuffer(data, f"<i{self.params.sampwidth}").reshape( (frames, self.params.nchannels) )
+                    res = np.concatenate( (res, data) )
+            return res[:,c]
+        
+        raise NotImplementedError

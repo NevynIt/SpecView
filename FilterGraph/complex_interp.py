@@ -3,7 +3,7 @@ import scipy.interpolate
 
 #TODO: detect and optimise for obvious cases
 
-def to_index_array(self, indexes, axis):
+def to_index_array(indexes, axis):
     if isinstance(indexes, np.ndarray):
         return indexes
     elif isinstance(indexes, numbers.Number):
@@ -89,7 +89,7 @@ class axis_interpolator(base_axis_sampler):
         im = self.interp_mode
         if im in ("floor", "ceil", "round", "throw"):
             return rv
-        elif im in complex_axis_sampler.interp_order:
+        elif im in axis_interpolator.interp_order:
             f = scipy.interpolate.interp1d(self.interpolation_indexes,rv,axis=self.pos,kind=im)
             return f(self.desired_indexes)
         else:
@@ -113,6 +113,8 @@ class axis_extender(base_axis_sampler):
         di = to_index_array(di, self.axis)
         fm = self.fill_mode
         domain = self.axis.index_domain    
+        self.inverse = None
+
         if fm == "throw":
             if ((di < domain.start) | (di >= domain.stop)).any():
                 raise IndexError
@@ -150,8 +152,9 @@ class axis_extender(base_axis_sampler):
         "return values for all the desired_indexes"
         #use the reconstruction array to get the unbounded values
         res = rv
-        if self.fill_mode == "throw":
+        if self.inverse is None:
             return res
+
         if len(res) > 0:
             res = np.take(res, self.inverse, self.pos)
         if self.fill_mode == "zeros":

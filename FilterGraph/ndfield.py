@@ -12,6 +12,7 @@ class base_field_sampler:
 
     def identify_indexes(self, indexes):
         "collect the required indexes from each axis in order (which also prepares the samplers)"
+        self.desired_indexes = indexes
         required_indexes = []
         for ai,di in zip(self.axes_interp, indexes):
             if isinstance(di, numbers.Number):
@@ -29,18 +30,18 @@ class base_field_sampler:
             values = ai.calculate_values(values)
 
         #squeeze the axes where the index was a scalar
-        scalars = [isinstance(di, numbers.Number) for di in indexes]
+        scalars = [isinstance(di, numbers.Number) for di in self.desired_indexes]
         if any(scalars):
             values = np.squeeze(values, np.arange(len(indexes))[scalars])
         
         return values
     
     def interpolate(self, space, indexes):
-        if all([isinstance(i, base_axis_sampler) for i in self.axes_interp]):
+        if all([(type(i) == base_axis_sampler) for i in self.axes_interp]):
             return self.sample(space, indexes)
 
         #identify the required indexes
-        required_indexes = self.identify_indexes(indexes)
+        indexes = self.identify_indexes(indexes)
 
         #sample the space
         values = self.sample(space, indexes)

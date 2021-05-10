@@ -1,4 +1,5 @@
 from FilterGraph.WavRead import WavReader
+from FilterGraph.complex_interp import axis_interpolator, axis_extender
 import numpy as np
 
 wr = WavReader()
@@ -9,7 +10,11 @@ print(f"{wr[:].shape=}")
 # smp0 = wr[0]
 # onesecs = wr.coordspace[0:1]
 # halfrate_left = wr[0:44100:2,0]
+wr.axes[0].sampler = (axis_interpolator, axis_extender)
+wr.axes[0].interp_mode = "floor"
+wr.axes[0].fill_mode = "zeros"
 dblrate_swap = wr[0:44100:0.5,[1,0]]
+dblrate_around = wr[-100:100:0.5]
 # wacky = wr[0:44100:0.32,[0,1,0,1,0,0,0,1,1]]
 
 pre = wr[-10:10:0.5]
