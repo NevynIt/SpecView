@@ -32,7 +32,7 @@ class base_field_sampler:
         #squeeze the axes where the index was a scalar
         scalars = [isinstance(di, numbers.Number) for di in self.desired_indexes]
         if any(scalars):
-            values = np.squeeze(values, np.arange(len(indexes))[scalars])
+            values = np.squeeze(values, np.arange(len(self.desired_indexes))[scalars])
         
         return values
     
