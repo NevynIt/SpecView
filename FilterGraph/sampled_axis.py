@@ -1,4 +1,5 @@
-from .complex_interp import *
+import class_definition_helpers as cdh
+from FilterGraph.axes import axis_info, domain
 
 class sampled_axis(axis_info):
     """

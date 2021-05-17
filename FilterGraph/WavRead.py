@@ -1,11 +1,11 @@
-import class_definition_helpers as cdh #class definition helpers
+import class_definition_helpers as cdh
 
 import numpy as np
 import wave, numbers
-import itertools
 
-from .ndfield import *
-from .sampled_axis import sampled_axis
+from FilterGraph.ndfield import *
+from FilterGraph.sampled_axis import sampled_axis
+from FilterGraph.axes import domain, identity_axis
 
 class WavReader(ndfield):
     props = cdh.property_store()
@@ -43,12 +43,10 @@ class WavReader(ndfield):
         if self.params == None:
             return np.int16
         return np.dtype(f"<i{self.params.sampwidth}")
+    
+    def __getitem__(self, key):
+        t, c = self.expand_ellipsis(key) #unpack the tuple
 
-    @cdh.indexable
-    def samplespace(self, i):
-        t, c = i #unpack the tuple
-
-        #t is a set of unique and sorted indexes, as provided by complex_interp
         nframes = self.shape[0]
         nchannels = self.shape[1]
         if isinstance(t, slice):
@@ -60,7 +58,7 @@ class WavReader(ndfield):
                 start = t.start or 0
                 stop = t.stop or nframes
             elif step < 0:
-                warnings.warn("maybe incorrect, boundaries might be wrong")
+                #warnings.warn("maybe incorrect, boundaries might be wrong")
                 start = t.start or (nframes - 1)
                 stop = t.stop or (0 - 1)
             t = np.arange(start,stop,step)

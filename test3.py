@@ -1,5 +1,8 @@
+from FilterGraph import extended
 from FilterGraph.WavRead import WavReader
-from FilterGraph.complex_interp import axis_interpolator, axis_extender
+from FilterGraph.interpolated import interpolated
+from FilterGraph.extended import extended
+from FilterGraph.coordspace import coordspace
 import numpy as np
 
 wr = WavReader()
@@ -7,22 +10,20 @@ print(f"{wr[:].shape=}")
 wr.filename = r"res\morn2.wav"
 print(f"{wr[:].shape=}")
 
-# smp0 = wr[0]
-# onesecs = wr.coordspace[0:1]
-# halfrate_left = wr[0:44100:2,0]
-wr.axes[0].sampler = (axis_interpolator, axis_extender)
-wr.axes[0].interp_mode = "floor"
-wr.axes[0].fill_mode = "zeros"
-dblrate_swap = wr[0:44100:0.5,[1,0]]
-dblrate_around = wr[-100:100:0.5]
-# wacky = wr[0:44100:0.32,[0,1,0,1,0,0,0,1,1]]
+smp0 = wr[0]
+onesecs = coordspace(wr)[0:1]
+halfrate_left = wr[0:44100:2,0]
 
-pre = wr[-10:10:0.5]
-# stop = wr.axes[0].index_domain.stop
-# post = wr[stop-10: stop+10: 2, 1]
-wr.axes[0].interp_mode = "linear"
-wr.axes[0].fill_mode = "repeat"
-pre2 = wr[-10:10:0.5]
+dblrate_swap = interpolated(wr)[0:44100:0.5, (1,0)]
 
-lin = wr[0:44100:0.5,[1,0]]
+eiwr = extended(interpolated(wr))
+dblrate_around = eiwr[-100:100:0.5]
+wacky = eiwr[0:44100:0.32, (0,1,0,1,0,0,0,1,1)]
+
+pre = eiwr[-10:10:0.5]
+
+eiwr2 = extended(interpolated(wr, mode="linear"), mode="repeat")
+pre2 = eiwr2[-10:10:0.5]
+
+lin = eiwr2[0:44100:0.5,[1,0]]
 print(lin-dblrate_swap)
