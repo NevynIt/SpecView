@@ -63,7 +63,7 @@ class WavReader(ndfield):
                 stop = t.stop or (0 - 1)
             t = np.arange(start,stop,step)
         elif isinstance(t, numbers.Number):
-            t = np.array(t)
+            t = np.array([t])
         
         if isinstance(t, np.ndarray):
             res = np.zeros( (0,nchannels), dtype = self.dtype)

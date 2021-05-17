@@ -12,11 +12,11 @@ print(f"{wr[:].shape=}")
 
 smp0 = wr[0]
 onesecs = coordspace(wr)[0:1]
-halfrate_left = wr[0:44100:2,0]
+iwr = interpolated(wr)
+halfrate_left = iwr[0:44100:2,0] #FIXME wrong size for result
+dblrate_swap = iwr[0:44100:0.5, (1,0)]
 
-dblrate_swap = interpolated(wr)[0:44100:0.5, (1,0)]
-
-eiwr = extended(interpolated(wr))
+eiwr = extended(iwr)
 dblrate_around = eiwr[-100:100:0.5]
 wacky = eiwr[0:44100:0.32, (0,1,0,1,0,0,0,1,1)]
 

@@ -1,5 +1,8 @@
 import numpy as np
 
+def identity_count(iterable, value):
+    return [x is value for x in iterable].count(True)
+
 class ndfield:
     """
     N-Dimensional field, mapping the coordinates in a space to either scalars, vectors or objects
@@ -27,11 +30,11 @@ class ndfield:
         n = len(self.axes)
         if not isinstance(key, tuple):
             key = (key,)
-        if key.count(np.newaxis) > 0:
+        if identity_count(key, np.newaxis) > 0:
             raise NotImplementedError("np.newaxis is not supported yet")
         if len(key) > n:
             raise IndexError
-        el = key.count(...)
+        el = identity_count(key, ...)
         if el > 1:
             raise IndexError
         if el == 1:

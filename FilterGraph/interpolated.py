@@ -34,7 +34,7 @@ class interpolated(axis_transform):
     def transform_axis(self, axis):
         ai = axis_info()
         ai.unit = axis.unit
-        ai.annotations = (f"interp({self.interp_mode})", ) + ai.annotations
+        ai.annotations = (f"interpolated({self.interp_mode})", ) + axis.annotations
         ai.axis_domain = domain(axis.axis_domain.start, axis.axis_domain.stop)
         ai.index_domain = domain(axis.index_domain.start, axis.index_domain.stop)
 

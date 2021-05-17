@@ -18,7 +18,7 @@ class extended(axis_transform):
     def transform_axis(self, axis):
         ai = axis_info()
         ai.unit = axis.unit
-        ai.annotations = (f"interp({self.interp_mode})", ) + ai.annotations
+        ai.annotations = (f"extended({self.fill_mode})", ) + axis.annotations
         ai.axis_domain = domain(step = axis.axis_domain.step, phase = axis.axis_domain.phase)
         ai.index_domain = domain(step = axis.index_domain.step, phase = axis.index_domain.phase)
 
@@ -87,6 +87,8 @@ class extended(axis_transform):
             tmpshape = list(rv.shape)
             tmpshape[axis_n] = len(di)
             tmp = np.zeros(tmpshape, rv.dtype)
-            tmp[sel] = res
+            ind = [np.s_[:]] * len(self.wrapped.axes)
+            ind[axis_n] = sel
+            tmp[ind] = res
             res = tmp
         return res

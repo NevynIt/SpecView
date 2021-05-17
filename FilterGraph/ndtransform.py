@@ -10,7 +10,7 @@ class ndtransform(ndfield):
         super().__init__()
         self.wrapped = wrapped
 
-    wrapped = props.reactive( None )
+    wrapped = props.reactive()
 
     @property
     def axes(self):

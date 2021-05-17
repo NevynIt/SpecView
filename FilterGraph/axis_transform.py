@@ -20,7 +20,7 @@ class axis_transform(ndtransform):
         self.transformation_axes = axes
         #if axes are repeated the transformation will be done multiple times
 
-    wrapped = cdh.inherited_reference()
+    wrapped = props.inherited()
 
     @props.cached(wrapped)
     def axes(self):
@@ -67,7 +67,7 @@ class axis_transform(ndtransform):
             contexts.append( (i, ctx ) )
             required_indexes.append(ctx.run(self.axis_identify_indexes, di[i], i))
 
-        axes_to_squeeze.set(a2s)
+        axes_to_squeeze.set(tuple(a2s))
         axis_contexts.set(contexts)
         return tuple(required_indexes)
 
@@ -105,3 +105,5 @@ class axis_transform(ndtransform):
                 start = indexes.start or (domain.stop - domain.step)
                 stop = indexes.stop or (domain.start - domain.step)
             return np.arange(start,stop,step)
+        else:
+            return np.array(indexes)
