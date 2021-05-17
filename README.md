@@ -1,3 +1,11 @@
+# Concept again May 16
+Simplest form of ndarray is a class:
+- indexable
+- with a dtype
+- with axes to describe the axes
+- with shape to describe the number of samples available in each axis (calculated)
+
+
 # Concept again
 The basic idea is that I am designing objects that refer to n-dimensional fields
 
