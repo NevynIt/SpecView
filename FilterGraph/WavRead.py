@@ -69,8 +69,10 @@ class WavReader(ndfield):
             res = np.zeros( (0,nchannels), dtype = self.dtype)
             if len(t)==0:
                 return res
-            #FIXME: this should check if all indexes are int and throw otherwise
-            t = t.astype(np.int_)
+            if not issubclass(t.dtype.type, numbers.Integral):
+                if np.any((t % 1) != 0):
+                    raise IndexError("Only integral indexes accepted")
+                t = t.astype(np.int_)
             t1, inv = np.unique(t, return_inverse=True)
             if t1[0]<0 or np.searchsorted(t1,self.params.nframes) != len(t1):
                 raise IndexError("Out of bounds")

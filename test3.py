@@ -3,7 +3,6 @@ from FilterGraph.WavRead import WavReader
 from FilterGraph.interpolated import interpolated
 from FilterGraph.extended import extended
 from FilterGraph.coordspace import coordspace
-import numpy as np
 
 wr = WavReader()
 print(f"{wr[:].shape=}")
@@ -13,7 +12,7 @@ print(f"{wr[:].shape=}")
 smp0 = wr[0]
 onesecs = coordspace(wr)[0:1]
 iwr = interpolated(wr)
-halfrate_left = iwr[0:44100:2,0] #FIXME wrong size for result
+halfrate_left = iwr[0:44100:2,0]
 dblrate_swap = iwr[0:44100:0.5, (1,0)]
 
 eiwr = extended(iwr)
