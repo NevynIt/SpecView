@@ -69,20 +69,28 @@ class WavReader(ndfield):
             res = np.zeros( (0,nchannels), dtype = self.dtype)
             if len(t)==0:
                 return res
+            #FIXME: this should check if all indexes are int and throw otherwise
             t = t.astype(np.int_)
+            t1, inv = np.unique(t, return_inverse=True)
+            if t1[0]<0 or np.searchsorted(t1,self.params.nframes) != len(t1):
+                raise IndexError("Out of bounds")
+
 
             bs = self.block_size
             with wave.open(self.filename, "r") as w:
                 pos = 0
-                while len(t) > 0:
-                    pos += t[0]
-                    t -= t[0]
-                    frames = max(t[t<bs])+1
-                    t = t[t>=frames]
+                while len(t1) > 0:
+                    pos += t1[0]
+                    t1 -= t1[0]
+                    indices = np.searchsorted(t1,bs)
+                    frames = t1[indices-1]+1
                     w.setpos(pos)
                     data = w.readframes(frames)
                     data = np.frombuffer(data, f"<i{self.params.sampwidth}").reshape( (frames, self.params.nchannels) )
+                    data = data[t1[:indices]]
                     res = np.concatenate( (res, data) )
+                    t1 = t1[indices:]
+            res = res[inv]
             return res[:,c]
         
         raise NotImplementedError

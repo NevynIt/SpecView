@@ -64,7 +64,7 @@ class extended(axis_transform):
             selected = (domain.start + ((di-domain.start) % (domain.stop-domain.start)))
         else:
             raise NotImplementedError
-        res, inv = np.unique(selected.astype(np.int_), return_inverse=True)
+        res, inv = np.unique(selected, return_inverse=True)
         inverse.set(inv)
         return res
 

@@ -22,8 +22,8 @@ wacky = eiwr[0:44100:0.32, (0,1,0,1,0,0,0,1,1)]
 
 pre = eiwr[-10:10:0.5]
 
-eiwr2 = extended(interpolated(wr, mode="linear"), mode="repeat")
+eiwr2 = interpolated(extended(wr, mode="repeat",axes=0), mode="linear",axes=0)
 pre2 = eiwr2[-10:10:0.5]
 
-lin = eiwr2[0:44100:0.5,[1,0]]
+lin = eiwr2[0:44100:0.5,(1,0)]
 print(lin-dblrate_swap)

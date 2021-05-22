@@ -49,7 +49,6 @@ class axis_transform(ndtransform):
     def identify_indexes(self, di):
         di = list(self.expand_ellipsis(di))
         a2s = []
-        required_indexes = []
         contexts = []
 
         ta = self.transformation_axes
@@ -65,11 +64,11 @@ class axis_transform(ndtransform):
                 a2s.append(i)
             ctx = contextvars.Context()
             contexts.append( (i, ctx ) )
-            required_indexes.append(ctx.run(self.axis_identify_indexes, di[i], i))
+            di[i] = ctx.run(self.axis_identify_indexes, di[i], i)
 
         axes_to_squeeze.set(tuple(a2s))
         axis_contexts.set(contexts)
-        return tuple(required_indexes)
+        return tuple(di)
 
     def calculate_values(self, rv):
         #ask each axis in order to perform the interpolation
@@ -98,12 +97,24 @@ class axis_transform(ndtransform):
             if step == 0 or step == None:
                 raise IndexError
             if step > 0:
-                start = indexes.start or domain.start
-                stop = indexes.stop or domain.stop
+                if indexes.start is None:
+                    start = domain.start
+                else:
+                    start = indexes.start
+                if indexes.stop is None:
+                    stop = domain.stop
+                else:
+                    stop = indexes.stop
             elif step < 0:
                 # warnings.warn("maybe incorrect, boundaries might be wrong")
-                start = indexes.start or (domain.stop - domain.step)
-                stop = indexes.stop or (domain.start - domain.step)
+                if indexes.start is None:
+                    start = domain.stop - domain.step
+                else:
+                    start = indexes.start
+                if indexes.stop is None:
+                    stop = domain.start - domain.step
+                else:
+                    stop = indexes.stop
             return np.arange(start,stop,step)
         else:
             return np.array(indexes)
