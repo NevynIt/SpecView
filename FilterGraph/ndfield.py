@@ -45,6 +45,13 @@ class ndfield:
 
     def __getitem__(self, indexes):
         raise NotImplementedError
+    
+    def __len__(self):
+        return self.size
+    
+    @property
+    def size(self):
+        return np.prod(self.shape)
 
     def __array__(self, dtype = None):
         if all([a.countable for a in self.axes]):

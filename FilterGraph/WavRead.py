@@ -32,7 +32,6 @@ class WavReader(ndfield):
         time = sampled_axis()
         time.unit = "s"
         time.axis_domain = domain(0, params.nframes/params.framerate, 1/params.framerate)
-        time.fill_mode = "zeros"
 
         channels = identity_axis()
         channels.axis_domain = domain(0,params.nchannels,1)
