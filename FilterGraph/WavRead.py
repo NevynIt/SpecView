@@ -28,18 +28,18 @@ class WavReader(ndfield):
         params = self.params
         if params == None:
             params = wave._wave_params(1,1,1,0,"NONE","")
-        time = axis_info(
+        self.time = axis_info(
             origin=0,
             step=1/params.framerate,
             steps_forwards=params.nframes,
             steps_backwards=0,
             unit="s"
         )
-        channels = axis_info(
+        self.channels = axis_info(
             steps_backwards=0,
             steps_forwards=params.nchannels
         )
-        return (time, channels)
+        return (self.time, self.channels)
 
     @property
     def dtype(self):
@@ -49,22 +49,16 @@ class WavReader(ndfield):
     
     def __getitem__(self, key):
         t, c = self.expand_ellipsis(key) #unpack the tuple
-
+                
         nframes = self.shape[0]
         nchannels = self.shape[1]
+
+        t = self.ensure_int_indexes(t, 0)
+        c = self.ensure_int_indexes(c, 1)
+
         if isinstance(t, slice):
             #FIXME: optimise this code, use the fact we are working with a slice! Moreover, it does not work for step < 0
-            step = t.step or 1
-            if step != 1:
-                raise IndexError("WavReader does not support direct resampling, consider using an interpolator")
-            if step > 0:
-                start = t.start or 0
-                stop = t.stop or nframes
-            elif step < 0:
-                #warnings.warn("maybe incorrect, boundaries might be wrong")
-                start = t.start or (nframes - 1)
-                stop = t.stop or (0 - 1)
-            t = np.arange(start,stop,step)
+            t = np.arange(t.start,t.stop,t.step)
         elif isinstance(t, numbers.Number):
             t = np.array([t])
         
@@ -72,14 +66,10 @@ class WavReader(ndfield):
             res = np.zeros( (0,nchannels), dtype = self.dtype)
             if len(t)==0:
                 return res
-            if not issubclass(t.dtype.type, numbers.Integral):
-                if np.any((t % 1) != 0):
-                    raise IndexError("Only integral indexes accepted")
-                t = t.astype(np.int_)
+
             t1, inv = np.unique(t, return_inverse=True)
             if t1[0]<0 or np.searchsorted(t1,self.params.nframes) != len(t1):
                 raise IndexError("Out of bounds")
-
 
             bs = self.block_size
             with wave.open(self.filename, "r") as w:
@@ -96,6 +86,7 @@ class WavReader(ndfield):
                     res = np.concatenate( (res, data) )
                     t1 = t1[indices:]
             res = res[inv]
+
             return res[:,c]
         
         raise NotImplementedError

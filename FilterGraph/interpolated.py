@@ -1,6 +1,6 @@
 from FilterGraph.ndfield import ndfield
 from FilterGraph.axis_transform import axis_transform
-from FilterGraph.axes import axis_info, domain
+from FilterGraph.axes import axis_info
 import scipy.interpolate
 import numpy as np
 import contextvars

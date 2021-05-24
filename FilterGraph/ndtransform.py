@@ -43,27 +43,7 @@ class ndtransform(ndfield):
         elif isinstance(indexes, Number):
             return np.array(indexes) #TODO: not sure why it was plain number before, it should have been a ndarray
         elif isinstance(indexes, slice):
-            domain = axis.index_slice
-            step = indexes.step or 1
-            if step > 0:
-                if indexes.start is None:
-                    start = domain.start
-                else:
-                    start = indexes.start
-                if indexes.stop is None:
-                    stop = domain.stop
-                else:
-                    stop = indexes.stop
-            elif step < 0:
-                # warnings.warn("maybe incorrect, boundaries might be wrong")
-                if indexes.start is None:
-                    start = domain.stop - domain.step
-                else:
-                    start = indexes.start
-                if indexes.stop is None:
-                    stop = domain.start - domain.step
-                else:
-                    stop = indexes.stop
-            return np.arange(start,stop,step)
+            sl = axis.update_slice(indexes)
+            return np.arange(sl.start,sl.stop,sl.step)
         else:
             return np.array(indexes)

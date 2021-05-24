@@ -2,8 +2,7 @@ from FilterGraph.ndtransform import ndtransform
 import class_definition_helpers as cdh
 from FilterGraph.ndfield import ndfield
 from FilterGraph.ndtransform import ndtransform
-from FilterGraph.axes import domain
-from FilterGraph.sampled_axis import sampled_axis
+from FilterGraph.axes import axis_info
 import contextvars
 import numpy as np
 
@@ -22,13 +21,17 @@ class RFFT(ndtransform):
         if len(window) == np.inf:
             raise ValueError("Infinite windows not supported")
         if not spacing:
-            spacing = self.wrapped.axes[self.axis].axis_domain.step
+            spacing = self.wrapped.axes[self.axis].step
         if not spacing:
             raise ValueError("Undefined sample spacing for source field")
         self.spacing = spacing
-        freq = sampled_axis()
-        freq.unit = "Hz"
-        freq.axis_domain = domain(0,(int(self.window.size/2)+1)/(self.window.size*self.spacing),1/(self.window.size*self.spacing))
+        freq = axis_info(
+            origin = 0,
+            step = 1/(self.window.size*self.spacing),
+            steps_forwards=int(self.window.size/2)+1,
+            steps_backwards=0,
+            unit="Hz"
+        )
         self.freq_axis = freq
 
     @property
@@ -40,9 +43,10 @@ class RFFT(ndtransform):
         return np.complex_
 
     def identify_indexes(self, di):
+        #FIXME: automatically pad with zeros if samples are required before the sampling rate, so that an extender is not required
         di = list(self.expand_ellipsis(di))
         di1 = self.to_index_array(di[self.axis], self.axis)
-        sampler = (np.arange(self.window.size)-int(self.window.size/2)) #FIXME: this assumes that the source axis is a sampled axis
+        sampler = (np.arange(self.window.size)-int(self.window.size/2))
         ind = np.repeat(di1,sampler.size).reshape( (di1.size, sampler.size) )
         ind += np.repeat(sampler,di1.size).reshape( (sampler.size, di1.size) ).T
         ind = ind.flatten()

@@ -1,3 +1,4 @@
+import numbers
 from typing import Tuple
 from FilterGraph.axes import axis_info
 import numpy as np
@@ -14,7 +15,7 @@ class ndfield:
     """
     
     @property
-    def axes(self) -> Tuple(axis_info):
+    def axes(self) -> Tuple[axis_info]:
         raise NotImplementedError
 
     @property
@@ -63,3 +64,23 @@ class ndfield:
         else:
             # warnings.warn("not sure this is the right way to do it... maybe numpy will raise...")
             raise AttributeError
+
+    def ensure_int_indexes(self, i, axis = None):
+        if isinstance(i, slice):
+            if axis != None:
+                i = self.axes[axis].update_slice(i)
+            if i.start % 1 == 0 and i.stop % 1 == 0 and i.step % 1 == 0:
+                return slice(int(i.start), int(i.stop), int(i.step))
+        elif isinstance(i, numbers.Integral):
+            return i
+        if isinstance(i, np.ndarray):
+            pass
+        else:
+            i = np.array(i)
+
+        if isinstance(i, np.ndarray):
+            if issubclass(i.dtype.type, numbers.Integral):
+                return i
+            elif np.all((i % 1) == 0):
+                return i.astype(np.int_)
+        raise IndexError("Only integral indexes accepted")

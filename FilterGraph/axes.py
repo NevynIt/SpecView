@@ -17,7 +17,7 @@ class axis_info:
 
     @property
     def size(self):
-        return min(0, self.steps_forwards + self.steps_backwards)
+        return max(0, self.steps_forwards + self.steps_backwards)
     
     @property
     def countable(self) -> bool:
@@ -31,6 +31,30 @@ class axis_info:
     def index_slice(self):
         return slice(-self.steps_backwards,self.steps_forwards,1)
     
+    def update_slice(self, sl):
+        domain = self.index_slice
+        step = sl.step or 1
+        if step > 0:
+            if sl.start is None:
+                start = domain.start
+            else:
+                start = sl.start
+            if sl.stop is None:
+                stop = domain.stop
+            else:
+                stop = sl.stop
+        elif step < 0:
+            # warnings.warn("maybe incorrect, boundaries might be wrong")
+            if sl.start is None:
+                start = domain.stop - domain.step
+            else:
+                start = sl.start
+            if sl.stop is None:
+                stop = domain.start - domain.step
+            else:
+                stop = sl.stop
+        return slice(start,stop,step)
+
     @property
     def coord_slice(self):
         return slice(self.origin-self.steps_backwards*self.step,self.origin+self.steps_forwards*self.step,self.step)
