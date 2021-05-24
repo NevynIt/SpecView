@@ -43,10 +43,8 @@ class ndtransform(ndfield):
         elif isinstance(indexes, Number):
             return np.array(indexes) #TODO: not sure why it was plain number before, it should have been a ndarray
         elif isinstance(indexes, slice):
-            domain = axis.index_domain
+            domain = axis.index_slice
             step = indexes.step or 1
-            if step == 0 or step == None:
-                raise IndexError
             if step > 0:
                 if indexes.start is None:
                     start = domain.start

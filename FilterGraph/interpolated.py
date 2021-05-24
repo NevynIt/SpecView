@@ -4,6 +4,7 @@ from FilterGraph.axes import axis_info, domain
 import scipy.interpolate
 import numpy as np
 import contextvars
+import dataclasses
 
 desired_indexes = contextvars.ContextVar("desired_indexes")
 interpolation_indexes = contextvars.ContextVar("interpolation_indexes")
@@ -31,17 +32,8 @@ class interpolated(axis_transform):
         super().__init__(wrapped=wrapped, axes=axes)
         self.interp_mode = mode
 
-    def transform_axis(self, axis):
-        ai = axis_info()
-        ai.unit = axis.unit
-        ai.annotations = (f"interpolated({self.interp_mode})", ) + axis.annotations
-        ai.axis_domain = domain(axis.axis_domain.start, axis.axis_domain.stop)
-        ai.index_domain = domain(axis.index_domain.start, axis.index_domain.stop)
-
-        #TODO: verify as I am not sure this works
-        ai.to_index = axis.to_index
-        ai.from_index = axis.from_index
-        return ai
+    def transform_axis(self, axis:axis_info):
+        return dataclasses.replace(axis,annotations=(f"interpolated({self.interp_mode})", ) + axis.annotations)
 
     def axis_identify_indexes(self, di, axis_n):
         "return indexes that are aligned with the phase and step of axis.index_domain - limited to whole numbers for now"

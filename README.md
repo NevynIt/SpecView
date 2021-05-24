@@ -1,3 +1,10 @@
+# Rework of axes May 23
+Delete domain class, unify in axis_info.
+Axis info is the one containing directly:
+ - the boundaries of the axis, in coordspace
+ - the origin of indexes (i.e. the coord of index 0)
+ - the scale of indexes (i.e. the coord if index 1 minus the coord of index 0)
+
 # Concept again May 16
 Simplest form of ndarray is a class:
 - indexable

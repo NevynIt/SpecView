@@ -1,98 +1,64 @@
 import class_definition_helpers as cdh
 import numpy as np
+from dataclasses import dataclass
 
-class domain:
-    """ start is a valid coordinate, and determines the phase for the sampling """
-
-    @cdh.assignargs(start=-np.inf, stop=np.inf, step = None, phase = None)
-    def __init__(self, start, stop, step, phase):
-        pass
-
-    @property
-    def step(self):
-        return getattr(self, "_step", None)
-    @step.setter
-    def step(self, v):
-        if v == 0 or v==np.inf or v==-np.inf:
-            v = None
-        self._step = v
-
-    @property
-    def phase(self):
-        if self.step == None:
-            return None
-        ph = getattr(self, "_phase", None)
-        if ph==None:
-            if self.start == -np.inf:
-                return 0
-            else:
-                return self.start % self.step
-        else:
-            return ph % self.step
-
-    @phase.setter
-    def phase(self, v):
-        self._phase = v
+@dataclass
+class axis_info:
+    origin: float = 0 #coordinate of index 0
+    step: float = 1 #delta coordinate for each unit of index
+    steps_forwards: float = np.inf #number of samples in the direction of step (including the one at the origin)
+    steps_backwards: float = np.inf #number of samples in the direction opposite of step
+    unit: str = ""
+    annotations: tuple = ()
 
     @property
     def sampling_rate(self):
-        if self.step == None:
-            return None
         return 1/self.step
-    @sampling_rate.setter
-    def sampling_rate(self, v):
-        if v == 0 or v == None:
-            self.step = None
-        else:
-            self.step = 1/v
-        
+
     @property
-    def nsamples(self):
-        if self.step == None:
-            return np.inf #continuous domains have infinite samples
-        return int((self.stop-self.start)/self.step)
+    def size(self):
+        return min(0, self.steps_forwards + self.steps_backwards)
     
     @property
     def countable(self) -> bool:
-        n = self.nsamples
-        return n != None and n < np.inf
+        return self.size < np.inf
 
     @property
     def lenght(self):
-        return self.stop-self.start
+        return self.size * self.step
 
-    def arange(self):
-        if self.countable:
-            ph = self.phase
-            if ph == 0:
-                return np.arange(self.start, self.stop, self.step, dtype=np.intp)
-            else:
-                return np.arange(self.start+self.step-self.phase, self.stop, self.step, dtype=np.intp)
-        else:
-            return None
-    
-    def slice(self):
-        return slice(self.start,self.stop,self.step)
-
-class axis_info:
-    unit = cdh.default("")
-    annotations = cdh.default( () )
-    axis_domain = cdh.default()
-    index_domain = cdh.default()
-
-    def to_index(self, x):
-        raise NotImplementedError
-    
-    def from_index(self, indexes):
-        raise NotImplementedError
-
-class identity_axis(axis_info):
     @property
-    def index_domain(self):
-        return self.axis_domain
+    def index_slice(self):
+        return slice(-self.steps_backwards,self.steps_forwards,1)
+    
+    @property
+    def coord_slice(self):
+        return slice(self.origin-self.steps_backwards*self.step,self.origin+self.steps_forwards*self.step,self.step)
+
+    def __to_index(self, x):
+        return (x - self.origin)/self.step
 
     def to_index(self, x):
-        return x
-    
-    def from_index(self, indexes):
-        return indexes
+        if isinstance(x, slice):
+            sl = self.coord_slice
+            return slice(
+                self.__to_index(sl.start if x.start is None else x.start),
+                self.__to_index(sl.stop if x.stop is None else x.stop),
+                (x.step or sl.step)/self.step
+            )
+        else:
+            return self.__to_index(x)
+
+    def __to_coord(self, x):
+        return self.origin + x*self.step
+
+    def to_coord(self, x):
+        if isinstance(x, slice):
+            sl = self.index_slice
+            return slice(
+                self.__to_coord(sl.start if x.start is None else x.start),
+                self.__to_coord(sl.stop if x.stop is None else x.stop),
+                (x.step or sl.step)*self.step
+            )
+        else:
+            return self.__to_coord(x)

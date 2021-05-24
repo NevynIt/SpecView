@@ -1,3 +1,5 @@
+from typing import Tuple
+from FilterGraph.axes import axis_info
 import numpy as np
 
 def identity_count(iterable, value):
@@ -12,7 +14,7 @@ class ndfield:
     """
     
     @property
-    def axes(self):
+    def axes(self) -> Tuple(axis_info):
         raise NotImplementedError
 
     @property
@@ -23,7 +25,7 @@ class ndfield:
     @property
     def shape(self):
         "default implementation calculates the shape from the axes"
-        return tuple([a.index_domain.nsamples for a in self.axes])
+        return tuple([a.size for a in self.axes])
     
     def expand_ellipsis(self, key):
         "convenience function to complete the key for all axes"

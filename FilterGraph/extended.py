@@ -15,23 +15,21 @@ class extended(axis_transform):
         super().__init__(wrapped=wrapped, axes=axes)
         self.fill_mode = mode
 
-    def transform_axis(self, axis):
-        ai = axis_info()
-        ai.unit = axis.unit
-        ai.annotations = (f"extended({self.fill_mode})", ) + axis.annotations
-        ai.axis_domain = domain(step = axis.axis_domain.step, phase = axis.axis_domain.phase)
-        ai.index_domain = domain(step = axis.index_domain.step, phase = axis.index_domain.phase)
-
-        #TODO: verify as I am not sure this works
-        ai.to_index = axis.to_index
-        ai.from_index = axis.from_index
-        return ai
+    def transform_axis(self, axis: axis_info):
+        return axis_info(
+            origin = axis.origin,
+            step = axis.step,
+            steps_forwards= np.inf,
+            steps_backwards= np.inf,
+            unit= axis.unit,
+            annotations=(f"extended({self.fill_mode})", ) + axis.annotations
+        )
 
     def axis_identify_indexes(self, di, axis_n):
         "return indexes that are aligned with the boundaries of axis.index_domain - limited to whole numbers for now"
         di = self.to_index_array(di, axis_n)
         fm = self.fill_mode
-        domain = self.wrapped.axes[axis_n].index_domain
+        domain = self.wrapped.axes[axis_n].index_slice
 
         if fm == "throw":
             if ((di < domain.start) | (di >= domain.stop)).any():

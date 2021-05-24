@@ -4,8 +4,7 @@ import numpy as np
 import wave, numbers
 
 from FilterGraph.ndfield import *
-from FilterGraph.sampled_axis import sampled_axis
-from FilterGraph.axes import domain, identity_axis
+from FilterGraph.axes import axis_info
 
 class WavReader(ndfield):
     props = cdh.property_store()
@@ -29,12 +28,17 @@ class WavReader(ndfield):
         params = self.params
         if params == None:
             params = wave._wave_params(1,1,1,0,"NONE","")
-        time = sampled_axis()
-        time.unit = "s"
-        time.axis_domain = domain(0, params.nframes/params.framerate, 1/params.framerate)
-
-        channels = identity_axis()
-        channels.axis_domain = domain(0,params.nchannels,1)
+        time = axis_info(
+            origin=0,
+            step=1/params.framerate,
+            steps_forwards=params.nframes,
+            steps_backwards=0,
+            unit="s"
+        )
+        channels = axis_info(
+            steps_backwards=0,
+            steps_forwards=params.nchannels
+        )
         return (time, channels)
 
     @property
