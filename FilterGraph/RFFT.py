@@ -6,7 +6,6 @@ from FilterGraph.axes import domain
 from FilterGraph.sampled_axis import sampled_axis
 import contextvars
 import numpy as np
-import scipy.fft
 
 desired_freqs = contextvars.ContextVar("desired_freqs")
 inverse = contextvars.ContextVar("inverse")
@@ -61,8 +60,7 @@ class RFFT(ndtransform):
         newshape[self.axis] //= self.window.size
         newshape = [self.window.size,] + newshape
         rv = rv.reshape( newshape ) * self.window[:,np.newaxis,np.newaxis]
-        rv = scipy.fft.rfft(rv,axis = 0, overwrite_x=True, workers=-1)
-        # rv = np.fft.rfft(rv,axis = 0)
+        rv = np.fft.rfft(rv,axis = 0)
         rv = rv[df]
         rv = np.moveaxis(rv,0,-1)
         return rv
