@@ -1,17 +1,17 @@
+from numpy.lib.arraysetops import isin
 from FilterGraph.axis_transform import axis_transform
-from FilterGraph.axes import axis_info
+from FilterGraph.axes import axis_info, linear_axis_info
 
 class coordspace(axis_transform):
-    def transform_axis(self, axis: axis_info): #TODO: TESTME
-        cs = axis.coord_slice
+    def transform_axis(self, axis: axis_info, i): #TODO: TESTME
+        cs = axis.to_coord(slice(None))
         return axis_info(
-            origin = 0,
-            step = 1,
-            steps_forwards = cs.stop,
-            steps_backwards = -cs.start,
+            size = axis.size,
+            lbound = cs.start,
+            ubound = cs.stop - cs.step,
             unit = axis.unit,
-            annotations = ("coordspace", ) + axis.annotations
-        )
+            annotations = ("coordspace", ) + axis.annotations,
+           )
 
     def axis_identify_indexes(self, di, axis_n):
         return self.wrapped.axes[axis_n].to_index(di)

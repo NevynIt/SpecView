@@ -1,4 +1,5 @@
 {
     "python.pythonPath": "C:\\Users\\argio\\.virtualenvs\\SV\\Scripts\\python.exe",
-    "todo-tree.tree.showCountsInTree": false
+    "todo-tree.tree.showCountsInTree": false,
+    "jupyter.jupyterServerType": "local"
 }

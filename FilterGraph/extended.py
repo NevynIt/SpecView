@@ -15,15 +15,14 @@ class extended(axis_transform):
         super().__init__(wrapped=wrapped, axes=axes)
         self.fill_mode = mode
 
-    def transform_axis(self, axis: axis_info):
+    def transform_axis(self, axis: axis_info, i):
         return axis_info(
-            origin = axis.origin,
-            step = axis.step,
-            steps_forwards= np.inf,
-            steps_backwards= np.inf,
-            unit= axis.unit,
+            size=np.inf,
+            lbound=-np.inf,
+            ubound=np.inf,
+            unit=axis.unit,
             annotations=(f"extended({self.fill_mode})", ) + axis.annotations
-        )
+         )
 
     def axis_identify_indexes(self, di, axis_n):
         "return indexes that are aligned with the boundaries of axis.index_domain - limited to whole numbers for now"

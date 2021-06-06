@@ -1,70 +1,87 @@
+from typing import Tuple
 import class_definition_helpers as cdh
 import numpy as np
 from dataclasses import dataclass
 
 @dataclass
 class axis_info:
-    origin: float = 0 #coordinate of index 0
-    step: float = 1 #delta coordinate for each unit of index
-    steps_forwards: float = np.inf #number of samples in the direction of step (including the one at the origin)
-    steps_backwards: float = np.inf #number of samples in the direction opposite of step
+    size: int = np.inf
+    lbound: int = None
+    ubound: int = None
     unit: str = ""
-    annotations: tuple = ()
+    annotations: Tuple[str] = ()
 
-    @property
-    def sampling_rate(self):
-        return 1/self.step
+    def __post_init__(self):
+        if self.size <= 0:
+            raise ValueError("axis size must be > 0")
+        if self.countable:
+            if self.lbound is None:
+                self.lbound	= 0
+            if self.ubound is None:
+                self.ubound = self.lbound + self.size - 1
+            if self.size == 1 and self.lbound != self.ubound:
+                raise ValueError("size == 1 must imply lbound == ubound")
+        else:
+            if self.lbound is None:
+                self.lbound = 0
+            if self.ubound is None:
+                self.ubound = np.inf
 
-    @property
-    def size(self):
-        return max(0, self.steps_forwards + self.steps_backwards)
-    
     @property
     def countable(self) -> bool:
         return self.size < np.inf
 
-    @property
-    def lenght(self):
-        return self.size * self.step
-
-    @property
-    def index_slice(self):
-        return slice(-self.steps_backwards,self.steps_forwards,1)
-    
-    def update_slice(self, sl):
-        domain = self.index_slice
-        step = sl.step or 1
+    def update_slice(self, sl = slice(None)) -> slice:
+        if self.size == 1:
+            step = 1
+        else:
+            step = (self.ubound - self.lbound)/(self.size-1)
+            if step % 1 == 0:
+                step = int(step)
+        step = sl.step or step
         if step > 0:
             if sl.start is None:
-                start = domain.start
+                start = self.lbound
             else:
                 start = sl.start
             if sl.stop is None:
-                stop = domain.stop
+                stop = self.ubound + step
             else:
                 stop = sl.stop
         elif step < 0:
             # warnings.warn("maybe incorrect, boundaries might be wrong")
             if sl.start is None:
-                start = domain.stop - domain.step
+                start = self.ubound
             else:
                 start = sl.start
             if sl.stop is None:
-                stop = domain.start - domain.step
+                stop = self.lbound - step
             else:
                 stop = sl.stop
         return slice(start,stop,step)
 
+    def to_index(self, x):
+        raise NotImplementedError
+
+    def to_coord(self, x):
+        raise NotImplementedError
+
+@dataclass
+class linear_axis_info(axis_info):
+    origin: float = 0 #coordinate of index 0
+    step: float = 1 #delta coordinate for each unit of index
+
     @property
-    def coord_slice(self):
-        return slice(self.origin-self.steps_backwards*self.step,self.origin+self.steps_forwards*self.step,self.step)
+    def sampling_rate(self):
+        return 1/self.step
 
     def __to_index(self, x):
         return (x - self.origin)/self.step
 
     def to_index(self, x):
         if isinstance(x, slice):
-            sl = self.coord_slice
+            sl = self.update_slice()
+            sl = slice(self.__to_coord(sl.start), self.__to_coord(sl.stop), self.step)
             return slice(
                 self.__to_index(sl.start if x.start is None else x.start),
                 self.__to_index(sl.stop if x.stop is None else x.stop),
@@ -78,7 +95,7 @@ class axis_info:
 
     def to_coord(self, x):
         if isinstance(x, slice):
-            sl = self.index_slice
+            sl = self.update_slice()
             return slice(
                 self.__to_coord(sl.start if x.start is None else x.start),
                 self.__to_coord(sl.stop if x.stop is None else x.stop),

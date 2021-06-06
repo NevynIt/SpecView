@@ -32,7 +32,7 @@ class interpolated(axis_transform):
         super().__init__(wrapped=wrapped, axes=axes)
         self.interp_mode = mode
 
-    def transform_axis(self, axis:axis_info):
+    def transform_axis(self, axis:axis_info, i):
         return dataclasses.replace(axis,annotations=(f"interpolated({self.interp_mode})", ) + axis.annotations)
 
     def axis_identify_indexes(self, di, axis_n):

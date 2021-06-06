@@ -1,9 +1,20 @@
+# Rework of axes June 5
+base axis_info focuses on slicing and accessing as an array
+derived linear_axis_info samples linearly
+almost all is updated, except sampled
+
 # Rework of axes May 23
 Delete domain class, unify in axis_info.
 Axis info is the one containing directly:
- - the boundaries of the axis, in coordspace
  - the origin of indexes (i.e. the coord of index 0)
  - the scale of indexes (i.e. the coord if index 1 minus the coord of index 0)
+ - the boundaries of the axis, in samples around the origin
+ ---DONE
+
+ other idea: let's make the ndfields "permissive", i.e. try to satisfy the request silently with good defaults.
+ for example, return zeros outside the space where the field is defined and floor interpolate if ints are required
+ (maybe use a "permissive" flag at ndfield level, if False, then raise exceptions if things are not perfect,
+ if True, try to accomodate the requests. default should be True)
 
 # Concept again May 16
 Simplest form of ndarray is a class:

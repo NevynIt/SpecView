@@ -33,11 +33,11 @@ class axis_transform(ndtransform):
         for i in ta:
             if i < 0:
                 i = len(tmp) - i
-            tmp[i] = self.transform_axis(tmp[i])
+            tmp[i] = self.transform_axis(tmp[i], i)
 
         return tmp
 
-    def transform_axis(self, axis):
+    def transform_axis(self, axis, i):
         return axis
 
     def axis_identify_indexes(self, di, axis_n):

@@ -2,7 +2,7 @@ from FilterGraph.ndtransform import ndtransform
 import class_definition_helpers as cdh
 from FilterGraph.ndfield import ndfield
 from FilterGraph.ndtransform import ndtransform
-from FilterGraph.axes import axis_info
+from FilterGraph.axes import axis_info, linear_axis_info
 import contextvars
 import numpy as np
 
@@ -25,11 +25,9 @@ class RFFT(ndtransform):
         if not spacing:
             raise ValueError("Undefined sample spacing for source field")
         self.spacing = spacing
-        freq = axis_info(
-            origin = 0,
+        freq = linear_axis_info(
+            size = int(self.window.size/2)+1,
             step = 1/(self.window.size*self.spacing),
-            steps_forwards=int(self.window.size/2)+1,
-            steps_backwards=0,
             unit="Hz"
         )
         self.freq_axis = freq
