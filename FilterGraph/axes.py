@@ -59,6 +59,9 @@ class axis_info:
             else:
                 stop = sl.stop
         return slice(start,stop,step)
+    
+    def arange(self):
+        return np.linspace(self.lbound, self.ubound, self.size)
 
     def to_index(self, x):
         raise NotImplementedError
@@ -103,3 +106,33 @@ class linear_axis_info(axis_info):
             )
         else:
             return self.__to_coord(x)
+
+@dataclass
+class log_axis_info(axis_info):
+    scale: float = 1 #coordinate of index 0
+    base: float = 2 #delta coordinate for each unit of index
+
+    def __to_index(self, x):
+        return (x - self.origin)/self.step
+
+    def to_index(self, x):
+        if isinstance(x, slice):
+            if x.step is None:
+                size = self.size
+            elif x.start is None or x.stop is None:
+                raise NotImplementedError("Inference of number of sample not implemented for automatically inferred bounds")
+            else:
+                size = (x.stop - x.start) / x.step
+            lbound = self.lbound if x.start is None else x.start
+            ubound = self.ubound if x.stop is None else x.stop
+            x = np.linspace(lbound, ubound, size)
+        return self.__to_index(x)
+
+    def __to_coord(self, x):
+        return np.power(self.base,x) * self.scale
+
+    def to_coord(self, x):
+        if isinstance(x, slice):
+            x = self.update_slice(x)
+            x = np.arange(x.start, x.stop, x.step)
+        return self.__to_coord(x)

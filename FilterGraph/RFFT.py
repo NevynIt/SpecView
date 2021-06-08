@@ -21,8 +21,6 @@ class RFFT(ndtransform):
         if len(window) == np.inf:
             raise ValueError("Infinite windows not supported")
         if not spacing:
-            spacing = self.wrapped.axes[self.axis].step
-        if not spacing:
             raise ValueError("Undefined sample spacing for source field")
         self.spacing = spacing
         freq = linear_axis_info(
@@ -61,7 +59,7 @@ class RFFT(ndtransform):
         newshape = list(rv.shape)
         newshape[self.axis] //= self.window.size
         newshape = [self.window.size,] + newshape
-        rv = rv.reshape( newshape ) * self.window[:,np.newaxis,np.newaxis]
+        rv = rv.reshape( newshape ) * self.window[(np.s_[:],) + (np.newaxis,) * (len(newshape)-1)]
         rv = np.fft.rfft(rv,axis = 0)
         rv = rv[df]
         rv = np.moveaxis(rv,0,-1)

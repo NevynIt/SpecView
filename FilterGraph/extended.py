@@ -28,7 +28,7 @@ class extended(axis_transform):
         "return indexes that are aligned with the boundaries of axis.index_domain - limited to whole numbers for now"
         di = self.to_index_array(di, axis_n)
         fm = self.fill_mode
-        domain = self.wrapped.axes[axis_n].index_slice
+        domain = self.wrapped.axes[axis_n].update_slice()
 
         if fm == "throw":
             if ((di < domain.start) | (di >= domain.stop)).any():
@@ -84,7 +84,7 @@ class extended(axis_transform):
             tmpshape = list(rv.shape)
             tmpshape[axis_n] = len(di)
             tmp = np.zeros(tmpshape, rv.dtype)
-            ind = [np.s_[:]] * len(self.wrapped.axes)
+            ind = [np.s_[:]] * len(rv.shape)
             ind[axis_n] = sel
             tmp[ind] = res
             res = tmp

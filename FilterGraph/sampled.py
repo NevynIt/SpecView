@@ -5,7 +5,38 @@ from FilterGraph.axes import axis_info
 import numpy as np
 import contextvars
 
-class sampled(axis_transform): #FIXME: axis_info has changed!!!!
+class sampled_axis_info(axis_info):
+    def __init__(self, source: axis_info, sampler: axis_info):
+        self.source=source
+        self.sampler=sampler
+    
+    @property
+    def size(self):
+        return self.sampler.size
+    
+    @property
+    def lbound(self):
+        return self.sampler.lbound
+    
+    @property
+    def ubound(self):
+        return self.sampler.ubound
+    
+    @property
+    def unit(self):
+        return self.source.unit
+    
+    @property
+    def annotations(self):
+        return ("Sampled",)+ ("(",) + self.sampler.annotations + (")",) + self.source.annotations
+
+    def to_index(self, x):
+        return self.sampler.to_index(self.source.to_index(x))
+    
+    def to_coord(self, x):
+        return self.source.to_coord(self.sampler.to_coord(x))
+
+class sampled(axis_transform):
     def __init__(self, wrapped: ndfield, domains: Tuple[axis_info]):
         "domains are the axis_info describing the samplers applied to each axis"
         axes = set()
@@ -22,14 +53,10 @@ class sampled(axis_transform): #FIXME: axis_info has changed!!!!
         if d is None:
             return axis
         else:  
-            return axis_info(axis.to_coord(d.origin), axis.step * d.step, d.steps_forwards, d.steps_backwards, d.unit or axis.unit, ("Sampled", ) + d.annotations + axis.annotations)
+            return sampled_axis_info(axis, d)
 
     def axis_identify_indexes(self, di, axis_n):
         d :axis_info = self.domains[axis_n]
         if d is None:
             return di
         return d.to_coord(di)
-
-# Hierarchy of samplers
-# sampler generic - to_coords / to_index (optional)
-# linear sampler, log sampler, trigonometric sampler, etc...

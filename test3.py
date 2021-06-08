@@ -1,4 +1,4 @@
-from FilterGraph.axes import axis_info, linear_axis_info
+from FilterGraph.axes import axis_info, linear_axis_info, log_axis_info
 from FilterGraph import extended
 from FilterGraph.WavRead import WavReader
 from FilterGraph.interpolated import interpolated
@@ -38,8 +38,13 @@ print(lin-dblrate_swap)
 from FilterGraph.RFFT import RFFT
 import time
 
-wrfft = RFFT(extended(wr, mode="repeat",axes=0),window=np.hamming(2**15))
+wrfft = RFFT(extended(wr, mode="zeros",axes=0),window=np.hamming(2**10),spacing=1/44100)
 t0 = time.time()
 a = wrfft[0:44100*200:1100]
 print(a.shape)
 print(time.time() - t0)
+
+la = log_axis_info(80,0,79,scale=np.power(np.power(2,1/12),-49)*440,base=np.power(2,1/12))
+wrfftis = sampled(coordspace(interpolated(wrfft,axes=2,mode="linear"),axes=2),domains=(None,None,la))
+
+b = wrfftis[::44100/5, 0, 0:80:1]

@@ -55,13 +55,15 @@ class axis_transform(ndtransform):
         if ta == None:
             ta = set(range(len(self.wrapped.axes)))
 
-        for i in ta:
-            if i < 0:
-                i = len(self.wrapped.axes) - i
+        for i in range(len(self.wrapped.axes)):
             if isinstance(di[i], Number):
                 #wrap the scalar indexes, this is needed to make sure samplers work on the right axis
                 di[i] = np.array([di[i]])
                 a2s.append(i)
+
+        for i in ta:
+            if i < 0:
+                i = len(self.wrapped.axes) - i
             ctx = contextvars.Context()
             contexts.append( (i, ctx ) )
             di[i] = ctx.run(self.axis_identify_indexes, di[i], i)
