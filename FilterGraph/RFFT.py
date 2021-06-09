@@ -43,8 +43,8 @@ class RFFT(ndtransform):
         di = list(self.expand_ellipsis(di))
         di1 = self.to_index_array(di[self.axis], self.axis)
         sampler = (np.arange(self.window.size)-int(self.window.size/2))
-        ind = np.repeat(di1,sampler.size).reshape( (di1.size, sampler.size) )
-        ind += np.repeat(sampler,di1.size).reshape( (sampler.size, di1.size) ).T
+        ind = np.repeat(di1,sampler.size).reshape( (di1.size, sampler.size) ).T
+        ind += np.repeat(sampler,di1.size).reshape( (sampler.size, di1.size) )
         ind = ind.flatten()
         ind, inv = np.unique(ind, return_inverse=True)
         inverse.set(inv)
@@ -59,7 +59,7 @@ class RFFT(ndtransform):
         newshape = list(rv.shape)
         newshape[self.axis] //= self.window.size
         newshape = [self.window.size,] + newshape
-        rv = rv.reshape( newshape ) * self.window[(np.s_[:],) + (np.newaxis,) * (len(newshape)-1)]
+        rv = rv.reshape( newshape ) * self.window[(np.s_[:],) + (np.newaxis,) * (len(newshape)-1)] #FIXME: s_[:] should be in the position of self.axis and not necessarily at 0
         rv = np.fft.rfft(rv,axis = 0)
         rv = rv[df]
         rv = np.moveaxis(rv,0,-1)

@@ -86,6 +86,6 @@ class extended(axis_transform):
             tmp = np.zeros(tmpshape, rv.dtype)
             ind = [np.s_[:]] * len(rv.shape)
             ind[axis_n] = sel
-            tmp[ind] = res
+            tmp[tuple(ind)] = res
             res = tmp
         return res

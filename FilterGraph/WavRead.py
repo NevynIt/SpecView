@@ -58,7 +58,7 @@ class WavReader(ndfield):
             if len(t)==0:
                 return res
 
-            t1, inv = np.unique(t, return_inverse=True)
+            t1, inv = np.unique(t, return_inverse=True) #TODO: this could be skipped if we know it's sorted and without duplicates anyway
             if t1[0]<0 or np.searchsorted(t1,self.params.nframes) != len(t1):
                 raise IndexError("Out of bounds")
 
